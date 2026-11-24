@@ -1,0 +1,14 @@
+{
+  "name": "truck-pack-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "4Wall Truck Pack Planner: auto-packs flight cases into trucks and shows a labeled, color-coded 3D load plan for the crew.",
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "node tests/engine.test.js && node tests/pins.test.js"
+  },
+  "devDependencies": {
+    "jspdf": "2.5.1",
+    "three": "0.147.0"
+  }
+}

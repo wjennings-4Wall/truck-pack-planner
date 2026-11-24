@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4Wall Truck Pack Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* VOICE: a working shop tool, plain and exact, like a prep sheet taped inside a truck door.
+   IDEA: the 4Wall load plan: a lit truck box you can walk through case by case.
+   PICTURE: the 3D truck itself, dark like a trailer interior, cases in their label colors.
+   COLOUR and TYPE: 4Wall Blue #005eb8, black, white (brand guide); Bebas Neue heads, Roboto text.
+   LAYOUT: case entry on the left, truck on the right, load sequence below; stacks on phones. */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0b0c0e);--ink:light-dark(#0b0b0c,#f1f2f4);--mute:light-dark(#5b6068,#a3a9b2);--line:light-dark(#d9dce1,#2a2e35);--panel:light-dark(#f4f5f6,#15171b);--field:light-dark(#ffffff,#0f1114);--blue:#005eb8;--blue-ink:light-dark(#005eb8,#5aa7ff);--warn:light-dark(#b42318,#ff8a80);--ok:light-dark(#0b6b3a,#6fd39b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Roboto,Arial,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Bebas Neue",Arial,sans-serif;font-weight:400;letter-spacing:.01em;margin:0;line-height:1.05}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--blue-ink);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;padding:14px max(3vw,16px);border-bottom:4px solid var(--blue);background:light-dark(#fff,#000)}
+.brand{display:flex;align-items:center;gap:16px}
+.logo{height:40px;width:auto;display:block;padding:4px 6px;background:#fff;border-radius:2px}
+.brand h1{font-size:34px;border-left:3px solid var(--blue);padding-left:16px}
+.brand h1 span{color:var(--blue-ink)}
+.job{flex:1 1 260px;display:flex;gap:8px;align-items:center}
+.job input{flex:1;font-size:17px;font-weight:500;padding:9px 12px;border:1px solid var(--line);border-radius:4px;background:var(--field);min-height:44px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{min-height:44px;padding:0 16px;border-radius:4px;border:1px solid var(--line);background:var(--field);font-weight:500;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--blue-ink)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:#004c96}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+.main{display:grid;grid-template-columns:minmax(330px,440px) minmax(0,1fr);gap:0;align-items:stretch}
+.main>aside{grid-column:1;grid-row:1}.main>.stage{grid-column:2;grid-row:1}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:18px 18px 28px;min-height:100%}
+.sec{margin-bottom:22px}
+.sec h2{font-size:26px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sec h2 small{font:500 13px Roboto,Arial,sans-serif;color:var(--mute)}
+label.f{display:grid;gap:3px;font-size:13px;color:var(--mute)}
+.f input,.f select,.case input:not([type=checkbox]):not([type=color]){width:100%;min-height:40px;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:16px;color:var(--ink)}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hint{font-size:13px;color:var(--mute);margin:6px 0 0}
+.cases{display:grid;gap:10px}
+.case{background:var(--field);border:1px solid var(--line);border-left:8px solid var(--c);border-radius:4px;padding:10px}
+.case.bad{border-color:var(--warn);border-left-color:var(--c)}
+.r1{display:grid;grid-template-columns:44px minmax(0,1fr) 74px 40px;gap:8px;align-items:center}
+.r1 input[type=color]{width:44px;height:40px;padding:2px;border:1px solid var(--line);border-radius:4px;background:var(--field)}
+.r1 .nm{font-weight:700}
+.del{width:40px;height:40px;border:1px solid transparent;border-radius:4px;background:none;font-size:22px;line-height:1;color:var(--mute)}
+.del:hover{color:var(--warn);border-color:var(--line)}
+.r2{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:8px}
+.r2 label,.r1 label{font-size:12px;color:var(--mute);display:grid;gap:2px}
+.r3{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-size:13px}
+.r3 label{display:flex;gap:7px;align-items:center;min-height:32px}
+.r3 input{width:18px;height:18px;accent-color:var(--blue)}
+.note{font-size:12px;color:var(--warn);width:100%}
+.where{font-size:12px;color:var(--mute);width:100%}.where:empty,.note:empty{display:none}
+.mini{width:72px!important;min-height:34px!important;padding:2px 6px!important;font-size:14px!important}
+.ttabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.ttab{display:grid;text-align:left;gap:1px;min-height:48px;padding:6px 14px;border:1px solid var(--line);border-radius:4px;background:var(--field);line-height:1.25}
+.ttab b{font-weight:700}.ttab small{font-size:12px;color:var(--mute)}
+.ttab[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}.ttab[aria-pressed=true] small{color:#dbe8f7}
+.ttab.add{border-style:dashed;color:var(--blue-ink);font-weight:500;place-items:center}
+.manual{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:8px 12px;border:1px solid var(--blue-ink);border-radius:4px;font-size:14px}
+.manual[hidden],.adj[hidden],#byTruck[hidden]{display:none}
+.adj{margin-top:10px;padding:12px 14px;border:2px solid var(--blue-ink);border-radius:4px;background:var(--panel)}
+.adj .hd{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
+.adj .hd b{font-size:16px}.adj .pos{font-size:13px;color:var(--mute)}
+.adjb{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.adjb select{min-height:36px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);font-size:14px}
+.adjb .grp{display:flex;gap:6px;flex-wrap:wrap;padding-right:10px;border-right:1px solid var(--line)}.adjb .grp:last-child{border-right:0}
+#adjMsg{margin:8px 0 0;font-size:14px;min-height:1.4em}
+.mini-chip{display:inline-block;white-space:nowrap;margin:2px 10px 2px 0;font-size:13px}
+#xScope{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);font-size:15px}
+.r3 select{min-height:34px;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:14px;color:var(--ink)}
+.rsl{display:grid;gap:8px}
+.rsl select{width:100%;min-height:40px;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:16px;color:var(--ink)}
+tr.rs td{background:light-dark(#fff8db,#2a2410);font-weight:500}
+tr.rs.cur td{background:light-dark(#ffe98a,#4a3d10)}
+.bar{display:inline-block;width:18px;height:6px;border-radius:3px;background:#9aa3ad;margin-right:7px;vertical-align:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}.bar.s{background:#ffc400}
+.addrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+details.rules summary{cursor:pointer;font:400 26px "Bebas Neue",Arial,sans-serif;list-style:none;min-height:36px}
+details.rules summary::after{content:" +";color:var(--blue-ink)}details.rules[open] summary::after{content:" –"}
+.rules .row{display:flex;gap:9px;align-items:center;min-height:38px;font-size:14px}
+.rules .row input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue)}
+.stage{padding:18px max(2.4vw,16px) 8px}
+.vbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{min-height:40px;padding:0 14px;border:0;background:var(--field);font-weight:500;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--blue);color:#fff}
+.vp{position:relative;height:clamp(360px,60vh,720px);border-radius:4px;overflow:hidden;background:#0d0f12;touch-action:none}
+.vp .tag{position:absolute;left:12px;top:10px;color:#cfd6df;font:400 22px "Bebas Neue",Arial,sans-serif;pointer-events:none;text-shadow:0 1px 2px #000}
+.vp .err{position:absolute;inset:0;display:grid;place-items:center;color:#cfd6df;padding:20px;text-align:center}
+.stepbar{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto;gap:8px;align-items:center;margin-top:10px}
+.stepbar input[type=range]{width:100%;accent-color:var(--blue);height:44px}
+.cap{min-height:52px;margin-top:6px;padding:10px 14px;border-left:4px solid var(--blue);background:var(--panel);font-size:15px}
+.cap b{font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:14px}
+.st{background:var(--bg);padding:12px 14px}
+.st .k{font-size:13px;color:var(--mute)}
+.st .v{font:400 34px/1 "Bebas Neue",Arial,sans-serif;margin-top:4px;white-space:nowrap}
+.st .v small{display:block;margin-top:4px;font:500 13px Roboto,Arial,sans-serif;color:var(--mute);white-space:normal}
+.meter{height:6px;background:var(--line);margin-top:8px;border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--blue)}
+.meter.over i{background:var(--warn)}
+.warns{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.warns li{padding:8px 12px;border:1px solid var(--warn);color:var(--warn);border-radius:4px;font-size:14px}
+.warns li.okk{border-color:var(--ok);color:var(--ok)}
+.export{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.export h3{font-size:24px;margin-right:6px}
+.band{padding:22px max(2.4vw,16px) 40px;border-top:1px solid var(--line)}
+.band h2{font-size:30px;margin-bottom:10px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 12px 0 6px;border:1px solid var(--line);border-radius:18px;background:var(--field);font-size:14px}
+.chip i{width:22px;height:22px;border-radius:50%;background:var(--c);border:1px solid rgba(0,0,0,.3)}
+.chip[aria-pressed=true]{border-color:var(--blue-ink);box-shadow:0 0 0 2px var(--blue-ink) inset}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-weight:500;color:var(--mute);border-bottom:2px solid var(--ink);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.cur td{background:light-dark(#e6f0fa,#10243a)}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;background:var(--c);vertical-align:-2px;margin-right:7px;border:1px solid rgba(0,0,0,.35)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;place-items:center;padding:16px;z-index:50}
+.modal.on{display:grid}
+.box{background:var(--bg);color:var(--ink);border-radius:6px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:20px;border-top:5px solid var(--blue)}
+.box h2{font-size:30px;margin-bottom:8px}
+.box textarea{width:100%;min-height:200px;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink)}
+.plans{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px}
+.plans li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px}
+.plans li small{display:block;color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:10px 16px;border-radius:4px;border-left:4px solid var(--blue);z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.sample{font-size:12px;color:var(--mute)}
+footer{padding:14px max(2.4vw,16px) 26px;font-size:12px;color:var(--mute);border-top:1px solid var(--line)}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+@media(max-width:900px){.main{grid-template-columns:minmax(0,1fr)}.main>aside{grid-column:1;grid-row:2;border-right:0;border-top:1px solid var(--line)}.main>.stage{grid-column:1;grid-row:1}.brand h1{font-size:28px}}
+@media(max-width:600px){.logo{height:32px}.brand h1{font-size:24px}.r2{grid-template-columns:repeat(3,minmax(0,1fr))}.stepbar{grid-template-columns:auto auto minmax(0,1fr) auto}.stepbar .play{display:none}table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:7em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6.5em;margin-inline-start:-7em;color:var(--mute)}.stack td:empty{display:none}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img class="logo" src="data:image/png;base64,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" alt="4Wall Entertainment"><h1>Truck Pack <span>Planner</span></h1></div>
+  <div class="job"><input id="jobName" aria-label="Job name" placeholder="Job name or number"></div>
+  <div class="acts">
+    <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button class="btn" id="newBtn">New</button>
+    <button class="btn" id="openBtn" disabled>Open</button>
+    <button class="btn pri" id="saveBtn" disabled>Save plan</button>
+  </div>
+</header>
+
+<div class="main">
+  <section class="stage">
+    <div class="ttabs" id="ttabs" role="group" aria-label="Trucks"></div>
+    <div class="vbar">
+      <div class="seg" role="group" aria-label="View">
+        <button data-v="iso" aria-pressed="true">3D</button><button data-v="top" aria-pressed="false">Top</button><button data-v="side" aria-pressed="false">Side</button><button data-v="rear" aria-pressed="false">From doors</button>
+      </div>
+      <button class="btn sm" id="fitBtn">Reset view</button>
+    </div>
+    <div class="vp" id="vp"><div class="tag" id="vpTag"></div></div>
+    <div class="stepbar">
+      <button class="btn sm" id="prevBtn" aria-label="Previous step">◀</button>
+      <button class="btn sm" id="nextBtn" aria-label="Next step">▶</button>
+      <input type="range" id="stepR" min="0" max="0" value="0" aria-label="Load step">
+      <button class="btn sm play" id="playBtn">Play</button>
+      <button class="btn sm" id="allBtn">Show all</button>
+    </div>
+    <div class="cap" id="cap"></div>
+    <div class="adj" id="adj" hidden>
+      <div class="hd"><b id="adjT"></b><span class="pos" id="adjPos"></span></div>
+      <div class="adjb">
+        <div class="grp"><button class="btn sm pri" data-a="rot" title="R">Turn 90°</button></div>
+        <div class="grp"><button class="btn sm" data-a="nose" title="Left arrow">◀ Nose</button><button class="btn sm" data-a="doors" title="Right arrow">Doors ▶</button><button class="btn sm" data-a="driver" title="Up arrow">▲ Driver</button><button class="btn sm" data-a="curb" title="Down arrow">Curb ▼</button><label class="sr" for="adjStep" style="font-size:13px;color:var(--mute)">by</label><select id="adjStep" aria-label="Step size"></select></div>
+        <div class="grp"><button class="btn sm" data-a="snose">Slide to nose</button><button class="btn sm" data-a="sdriver">Slide to driver wall</button><button class="btn sm" data-a="scurb">Slide to curb wall</button></div>
+        <div class="grp"><button class="btn sm" data-a="done">Done</button></div>
+      </div>
+      <p id="adjMsg" role="status"></p>
+    </div>
+    <div class="manual" id="manual" hidden><span>This truck's layout has been adjusted by hand. Cases you add are fitted around it.</span><button class="btn sm" id="autoBtn">Back to auto layout</button></div>
+    <div class="stats" id="stats"></div>
+    <ul class="warns" id="warns"></ul>
+    <div class="export">
+      <h3>Send to crew</h3>
+      <select id="xScope" aria-label="Which trucks to export"><option value="all">All trucks</option><option value="this">This truck only</option></select>
+      <button class="btn pri" data-x="pdf">PDF load sheet</button>
+      <button class="btn" data-x="html">3D viewer file</button>
+      <button class="btn" data-x="png">Image of this view</button>
+      <button class="btn" data-x="csv">Load list (CSV)</button>
+      <button class="btn" data-x="copy">Copy load list</button>
+    </div>
+    <p class="hint" id="dlNote"></p>
+  </section>
+
+  <aside>
+    <div class="sec">
+      <h2><span id="truckH">Truck</span> <small id="truckCap"></small></h2>
+      <label class="f">Truck name<input id="tName" placeholder="Truck 1" aria-describedby="truckHint"></label>
+      <label class="f" style="margin-top:8px">Vehicle<select id="truckSel"></select></label>
+      <div class="g3" style="margin-top:8px">
+        <label class="f"><span>Inside length <b class="u"></b></span><input id="tL" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Inside width <b class="u"></b></span><input id="tW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Inside height <b class="u"></b></span><input id="tH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Door width <b class="u"></b></span><input id="tDW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Door height <b class="u"></b></span><input id="tDH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Payload <b class="uw"></b></span><input id="tP" type="number" step="any" inputmode="decimal"></label>
+      </div>
+      <p class="hint">Presets are typical rental sizes. Measure or confirm the actual truck with the vendor; wheel wells, liftgates and door tracks vary.</p>
+      <p class="hint" id="truckHint" hidden>Use the tabs above the 3D view to switch trucks. Each case type can go in a set truck or stay on Auto, which fills the trucks in tab order and spills into the next one.</p>
+      <button class="btn sm" id="rmTruck" hidden>Remove this truck</button>
+    </div>
+
+    <div class="sec">
+      <h2>Cases <small id="caseCap"></small></h2>
+      <div class="cases" id="cases"></div>
+      <div class="addrow">
+        <button class="btn pri" id="addBtn">Add case type</button>
+        <button class="btn" id="pasteBtn">Paste from spreadsheet</button>
+      </div>
+      <p class="hint">Order sets load order: 1 goes in first, at the nose. Give "first off at the venue" gear the highest number.</p>
+      <p class="sample" id="sampleNote">Sample job loaded so you can see how it works. Replace it with your own cases, or press New.</p>
+    </div>
+
+    <div class="sec">
+      <h2 id="rsH">Load bars and straps</h2>
+      <div class="rsl" id="rsl"></div>
+      <p class="hint">Each one goes across the truck right behind that order group, and the next group loads behind it. Load bars take 3" of floor, straps 1". To put one in the middle of a group, split those cases into two order numbers.</p>
+    </div>
+
+    <details class="sec rules">
+      <summary>Packing rules</summary>
+      <label class="f" style="margin-top:6px">Units
+        <select id="units"><option value="imperial">Inches and pounds</option><option value="metric">Centimetres and kilograms</option></select></label>
+      <div class="g3" style="margin-top:8px">
+        <label class="f"><span>Gap between cases <b class="u"></b></span><input id="rGap" type="number" step="any" min="0"></label>
+        <label class="f"><span>Max stack height <b class="u"></b></span><input id="rMax" type="number" step="any" min="0" placeholder="Ceiling"></label>
+        <label class="f"><span>Min support %</span><input id="rSup" type="number" step="5" min="50" max="100"></label>
+      </div>
+      <label class="row"><input type="checkbox" id="rHeavy"> Never put a heavier case on a lighter one</label>
+      <label class="row"><input type="checkbox" id="rStrict"> Keep each load-order group in its own section</label>
+      <div class="row" style="flex-wrap:wrap;margin-top:6px">Set every case to sit on: <button class="btn sm" data-bulk="same">Same case only</button><button class="btn sm" data-bulk="any">Any case</button></div>
+      <p class="hint">Cases stay upright (flight cases are never laid on their sides). "Can turn sideways" lets a case rotate 90° on the floor. "Same case only" is for cases with caster cups in the lid: a case sits only on an identical case, lined up so its wheels drop into the cups. "Max stack" is how many cases high, counting the bottom one; blank means as high as fits. In a mixed stack the lowest limit wins.</p>
+    </details>
+  </aside>
+</div>
+
+<section class="band" id="byTruck" hidden>
+  <h2>Gear by truck</h2>
+  <div class="scroll"><table class="stack" id="byT"><thead><tr><th>Truck</th><th>Vehicle</th><th class="n">Cases</th><th class="n">Weight</th><th class="n">Floor used</th><th>What's in it</th></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="band">
+  <h2 id="seqH">Load sequence</h2>
+  <div class="legend" id="legend"></div>
+  <div class="scroll"><table class="stack" id="seqT"><thead><tr><th class="n">Case #</th><th>Case</th><th>Size (along × across × high)</th><th>Long side</th><th class="n">Weight</th><th class="n">From nose</th><th>Side</th><th>Level</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+<footer>4Wall Entertainment · Truck Pack Planner. Saved plans are shared with everyone who can open this page. The auto-pack is a starting point; the crew chief has the final say on the load.</footer>
+
+<div class="modal" id="pasteM" role="dialog" aria-modal="true" aria-labelledby="pasteH"><div class="box">
+  <h2 id="pasteH">Paste cases</h2>
+  <p class="hint">Copy rows from Excel or Google Sheets in this column order: <b>Name, Length, Width, Height, Weight, Qty</b>. Weight can be blank. Dimensions in <b class="u"></b>, weight in <b class="uw"></b>. A header row is skipped.</p>
+  <textarea id="pasteTx" placeholder="Moving light 2-pack	48	27	39	320	6&#10;Cable trunk	48	24	30		4"></textarea>
+  <p class="hint" id="pasteMsg"></p>
+  <div class="addrow"><button class="btn pri" id="pasteGo">Add cases</button><button class="btn" data-close>Cancel</button></div>
+</div></div>
+
+<div class="modal" id="openM" role="dialog" aria-modal="true" aria-labelledby="openH"><div class="box">
+  <h2 id="openH">Saved plans</h2>
+  <ul class="plans" id="plans"></ul>
+  <div class="addrow"><button class="btn" data-close>Close</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* Truck pack engine. Units: inches, lbs. x = from nose (bulkhead) toward doors, y = from driver wall, z = up. */
+function packTruck(truck, types, rules) {
+  const R = Object.assign({ gap: 0, support: 0.75, heavyBottom: true, strictGroups: false, maxStack: 0 }, rules || {});
+  const g = Math.max(0, +R.gap || 0), E = 0.01;
+  const TL = truck.L + g, TW = truck.W + g;
+  const TH = Math.min(truck.H, R.maxStack > 0 ? R.maxStack : Infinity);
+  const doorW = truck.doorW || truck.W, doorH = truck.doorH || truck.H;
+  const items = [], unplaced = [];
+  types.forEach(t => {
+    const q = Math.max(0, Math.floor(+t.qty || 0));
+    const list = Array.isArray(t.units) ? t.units : Array.from({ length: q }, (_, i) => i + 1);
+    for (const i of list) items.push({ type: t.id, idx: i, of: +t.of || q, l: +t.l, w: +t.w, h: +t.h, wt: t.wt === '' || t.wt == null ? null : +t.wt, rot: t.rotate !== false, stack: t.stack !== false, sitOn: t.sitOn || 'same', maxStack: Math.floor(+t.maxStack) > 0 ? Math.floor(+t.maxStack) : Infinity, grp: +t.group || 1, capped: !!t.capped });
+  });
+  const fits = [], pinned = [];
+  const pinMap = new Map((R.pins || []).map(p => [p.type + '#' + p.idx, p]));
+  items.forEach(it => {
+    if (!(it.l > 0 && it.w > 0 && it.h > 0)) return unplaced.push({ item: it, reason: 'Missing dimensions' });
+    if (it.h > doorH) return unplaced.push({ item: it, reason: 'Taller than the door opening' });
+    if (Math.min(it.l, it.w) > doorW) return unplaced.push({ item: it, reason: 'Wider than the door opening' });
+    if (it.h > TH) return unplaced.push({ item: it, reason: 'Taller than the usable height' });
+    const okL = it.l <= truck.L && it.w <= truck.W, okR = it.rot && it.w <= truck.L && it.l <= truck.W;
+    if (!okL && !okR) return unplaced.push({ item: it, reason: 'Larger than the truck floor' });
+    const pin = pinMap.get(it.type + '#' + it.idx);
+    if (pin && ((Math.abs(pin.L - it.l) < 0.01 && Math.abs(pin.W - it.w) < 0.01) || (Math.abs(pin.L - it.w) < 0.01 && Math.abs(pin.W - it.l) < 0.01))) { it.pin = pin; pinned.push(it); return; }
+    fits.push(it);
+  });
+
+  const P = []; // placed: x,y,z,L,W,H (L,W include gap)
+  let pts = [{ x: 0, y: 0, z: 0 }], seen = new Set(['0,0,0']);
+  let barrier = 0, curGrp = null, grpMax = 0; const RS = [];
+  const rThick = gr => (R.restraints && +R.restraints[gr]) || 0;
+  const ov = (a0, a1, b0, b1) => a0 < b1 - E && b0 < a1 - E;
+  function collide(x, y, z, L, W, H) {
+    for (const b of P) if (ov(x, x + L, b.x, b.x + b.L) && ov(y, y + W, b.y, b.y + b.W) && ov(z, z + H, b.z, b.z + b.H)) return true;
+    return false;
+  }
+  function supportOf(x, y, z, L, W, it) {
+    if (z < E) return { ok: true, on: [], level: 1, cap: it.maxStack };
+    if (it.sitOn === 'floor') return { ok: false };
+    let area = 0; const on = [];
+    for (const b of P) {
+      if (Math.abs(b.z + b.H - z) > E) continue;
+      const ox = Math.min(x + L - g, b.x + b.L - g) - Math.max(x, b.x), oy = Math.min(y + W - g, b.y + b.W - g) - Math.max(y, b.y);
+      if (ox <= E || oy <= E) continue;
+      if (!b.it.stack) return { ok: false };
+      if (it.sitOn === 'same' && (b.it.type !== it.type || Math.abs(b.x - x) > E || Math.abs(b.y - y) > E || Math.abs(b.L - L) > E || Math.abs(b.W - W) > E)) return { ok: false };
+      if (R.heavyBottom && it.wt != null && b.it.wt != null && b.it.wt < it.wt) return { ok: false };
+      area += ox * oy; on.push(b);
+    }
+    const level = 1 + Math.max.apply(null, on.map(b => b.level)), cap = Math.min(it.maxStack, ...on.map(b => b.cap));
+    return { ok: area >= R.support * (L - g) * (W - g) - E && level <= cap, on, level, cap };
+  }
+  function addPt(x, y, z) {
+    if (x >= TL - E || y >= TW - E || z >= TH - E) return;
+    const k = x.toFixed(2) + ',' + y.toFixed(2) + ',' + z.toFixed(2);
+    if (seen.has(k)) return; seen.add(k); pts.push({ x, y, z });
+  }
+  function projY(x, y, z) { let ny = 0; for (const b of P) if (b.y + b.W <= y + E && x >= b.x - E && x < b.x + b.L - E && z >= b.z - E && z < b.z + b.H - E) ny = Math.max(ny, b.y + b.W); return ny; }
+  function projX(x, y, z) { let nx = barrier; for (const b of P) if (b.x + b.L <= x + E && y >= b.y - E && y < b.y + b.W - E && z >= b.z - E && z < b.z + b.H - E) nx = Math.max(nx, b.x + b.L); return Math.min(nx, x); }
+  function projZ(x, y, z) { let nz = 0; for (const b of P) if (b.z + b.H <= z + E && x >= b.x - E && x < b.x + b.L - E && y >= b.y - E && y < b.y + b.W - E) nz = Math.max(nz, b.z + b.H); return nz; }
+
+  // Hand-placed (pinned) cases go in first, exactly where they were put; invalid pins fall back to auto.
+  pinned.sort((a, b) => a.pin.z - b.pin.z);
+  for (const it of pinned) {
+    const p = it.pin, L = p.L + g, W = p.W + g;
+    const ok = p.x >= -E && p.y >= -E && p.z >= -E && p.x + p.L <= truck.L + E && p.y + p.W <= truck.W + E && p.z + it.h <= truck.H + E && !collide(p.x, p.y, p.z, L, W, it.h);
+    const on = ok && p.z > E ? P.filter(b => Math.abs(b.z + b.H - p.z) < 0.05 && ov(p.x, p.x + p.L, b.x, b.x + b.L - g) && ov(p.y, p.y + p.W, b.y, b.y + b.W - g)) : [];
+    if (!ok || (p.z > E && !on.length)) { fits.push(it); continue; }
+    const level = on.length ? 1 + Math.max(...on.map(b => b.level)) : 1, cap = Math.min(it.maxStack, ...on.map(b => b.cap));
+    P.push({ x: p.x, y: p.y, z: p.z, L, W, H: it.h, l: p.L, w: p.W, it, on, level, cap, pinned: true });
+    grpMax = Math.max(grpMax, p.x + L);
+  }
+  const hasPins = P.length > 0;
+  for (const b of P) { const { x, y, z, L, W, H } = b; addPt(x + L, y, z); addPt(x, y + W, z); addPt(x, y, z + H); addPt(x + L, projY(x + L, y, z), z); addPt(projX(x, y + W, z), y + W, z); addPt(x + L, 0, 0); }
+  pts = pts.filter(q => !P.some(c => q.x >= c.x - E && q.x < c.x + c.L - E && q.y >= c.y - E && q.y < c.y + c.W - E && q.z >= c.z - E && q.z < c.z + c.H - E));
+  fits.sort((a, b) => a.grp - b.grp || (b.l * b.w) - (a.l * a.w) || b.h - a.h || (b.wt || 0) - (a.wt || 0) || (a.type > b.type ? 1 : a.type < b.type ? -1 : 0) || a.idx - b.idx);
+  let loadWt = P.reduce((a, b) => a + (b.it.wt || 0), 0);
+  for (const it of fits) {
+    if (R.payloadCap > 0 && it.capped && it.wt && loadWt + it.wt > R.payloadCap) { unplaced.push({ item: it, reason: 'Over this truck’s payload' }); continue; }
+    if (!hasPins && curGrp !== null && it.grp !== curGrp) {
+      const th = rThick(curGrp);
+      if (th > 0 && P.some(b => b.it.grp === curGrp)) { RS.push({ grp: curGrp, x: grpMax, thick: th }); barrier = grpMax + th; addPt(barrier, 0, 0); }
+      else if (R.strictGroups) { barrier = grpMax; addPt(barrier, 0, 0); }
+    }
+    curGrp = it.grp;
+    pts.sort((a, b) => a.x - b.x || a.z - b.z || a.y - b.y);
+    const ors = [[it.l, it.w]];
+    if (it.rot && Math.abs(it.l - it.w) > E) ors.push([it.w, it.l]);
+    let best = null;
+    for (const p of pts) {
+      if (p.x < barrier - E) continue;
+      if (best && p.x > best.p.x + E) break;
+      for (const [l, w] of ors) {
+        const L = l + g, W = w + g, H = it.h;
+        if (p.x + L > TL + E || p.y + W > TW + E || p.z + H > TH + E) continue;
+        if (collide(p.x, p.y, p.z, L, W, H)) continue;
+        const s = supportOf(p.x, p.y, p.z, L, W, it);
+        if (!s.ok) continue;
+        const score = [p.x, p.z, p.y, p.x + L];
+        if (!best || score[0] < best.s[0] - E || (Math.abs(score[0] - best.s[0]) <= E && (score[1] < best.s[1] - E || (Math.abs(score[1] - best.s[1]) <= E && (score[2] < best.s[2] - E || (Math.abs(score[2] - best.s[2]) <= E && score[3] < best.s[3] - E))))))
+          best = { p, L, W, H, l, w, on: s.on, level: s.level, cap: s.cap, s: score };
+      }
+    }
+    if (!best) { unplaced.push({ item: it, reason: 'No room left in the truck' }); continue; }
+    const b = { x: best.p.x, y: best.p.y, z: best.p.z, L: best.L, W: best.W, H: best.H, l: best.l, w: best.w, it, on: best.on, level: best.level, cap: best.cap };
+    P.push(b); loadWt += it.wt || 0;
+    grpMax = Math.max(grpMax, b.x + b.L);
+    const { x, y, z, L, W, H } = b;
+    addPt(x + L, y, z); addPt(x, y + W, z); addPt(x, y, z + H);
+    addPt(x + L, projY(x + L, y, z), z); addPt(projX(x, y + W, z), y + W, z);
+    addPt(x + L, y, projZ(x + L, y, z)); addPt(x, y + W, projZ(x, y + W, z));
+    addPt(projX(x, y, z + H), y, z + H); addPt(x, projY(x, y, z + H), z + H);
+    pts = pts.filter(q => !P.some(c => q.x >= c.x - E && q.x < c.x + c.L - E && q.y >= c.y - E && q.y < c.y + c.W - E && q.z >= c.z - E && q.z < c.z + c.H - E));
+  }
+
+  if (hasPins) {
+    // Hand-adjusted layout: put each restraint right behind its group and check the next group leaves room.
+    [...new Set(P.map(b => b.it.grp))].sort((a, b) => a - b).forEach(gr => {
+      const th = rThick(gr); if (!th) return;
+      const x = P.reduce((m, b) => b.it.grp <= gr ? Math.max(m, b.x + b.L) : m, 0);
+      const next = P.reduce((m, b) => b.it.grp > gr ? Math.min(m, b.x) : m, Infinity);
+      RS.push({ grp: gr, x, thick: th, blocked: next < x + th - E });
+    });
+  } else if (curGrp !== null && rThick(curGrp) > 0 && P.some(b => b.it.grp === curGrp)) RS.push({ grp: curGrp, x: grpMax, thick: rThick(curGrp) });
+  RS.forEach(r => { r.x = Math.max(0, r.x - g); r.faceH = P.reduce((m, b) => b.it.grp <= r.grp && b.x + b.L >= r.x - 6 ? Math.max(m, b.z + b.H) : m, 0); r.fits = !r.blocked && r.x + r.thick <= truck.L + E; });
+  // Loading sequence: a case is loaded only after everything it rests on; otherwise nose first, then low, then driver side.
+  const done = new Set(), seq = [];
+  while (seq.length < P.length) {
+    let pick = null;
+    for (const b of P) {
+      if (done.has(b) || !b.on.every(s => done.has(s))) continue;
+      if (!pick || b.x < pick.x - 0.5 || (Math.abs(b.x - pick.x) <= 0.5 && (b.z < pick.z - E || (Math.abs(b.z - pick.z) <= E && b.y < pick.y)))) pick = b;
+    }
+    done.add(pick); seq.push(pick);
+  }
+  seq.forEach((b, i) => b.seq = i + 1);
+  let wt = 0, wx = 0, wy = 0, vol = 0, usedL = 0, known = 0;
+  const out = seq.map(b => {
+    const w = b.it.wt || 0; if (b.it.wt != null) known++;
+    wt += w; wx += w * (b.x + (b.L - g) / 2); wy += w * (b.y + (b.W - g) / 2);
+    vol += (b.L - g) * (b.W - g) * b.H; usedL = Math.max(usedL, b.x + b.L - g);
+    return { seq: b.seq, type: b.it.type, idx: b.it.idx, of: b.it.of, x: b.x, y: b.y, z: b.z, L: b.L - g, W: b.W - g, H: b.H, wt: b.it.wt, rotated: Math.abs(b.l - b.it.l) > E, on: b.on.map(s => s.seq), level: b.level, pinned: !!b.pinned, stack: b.it.stack, grp: b.it.grp };
+  });
+  return {
+    placed: out,
+    restraints: RS,
+    unplaced: unplaced.map(u => ({ type: u.item.type, idx: u.item.idx, reason: u.reason })),
+    stats: { count: out.length, total: items.length, weight: wt, weightKnown: known, cgX: wt ? wx / wt : null, cgY: wt ? wy / wt : null, volume: vol, truckVol: truck.L * truck.W * truck.H, usedL }
+  };
+}
+
+
+function TPViewer(el, opts) {
+  const THREE = window.THREE; opts = opts || {};
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setClearColor(opts.bg != null ? opts.bg : 0x0d0f12);
+  renderer.domElement.style.display = 'block'; renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+  el.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3f47, 0.95));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(0.6, 1, 0.8); scene.add(sun);
+  const persp = new THREE.PerspectiveCamera(38, 1, 1, 40000), ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -40000, 40000);
+  let markStep = null, cam = persp, view = 'iso', controls = null, plan = null, step = 0, root = null, metas = [], cursor = null, filterType = null;
+  const texCache = [];
+  function lum(hex) { const c = parseInt(hex.slice(1), 16), r = (c >> 16) / 255, g = (c >> 8 & 255) / 255, b = (c & 255) / 255; return 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+  function shade(hex, f) { const c = parseInt(hex.slice(1), 16); const ch = s => Math.max(0, Math.min(255, Math.round(((c >> s) & 255) * f))); return 'rgb(' + ch(16) + ',' + ch(8) + ',' + ch(0) + ')'; }
+  function fitText(ctx, t, maxW, size, weight) { let s = size; do { ctx.font = weight + ' ' + s + 'px Roboto, Arial, sans-serif'; if (ctx.measureText(t).width <= maxW) break; s -= 1; } while (s > 7); return s; }
+  function labelTex(color, name, sub, num, wIn, hIn) {
+    const cw = 256, ch = Math.max(48, Math.min(512, Math.round(256 * hIn / wIn)));
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch; const x = c.getContext('2d');
+    x.fillStyle = color; x.fillRect(0, 0, cw, ch);
+    x.strokeStyle = shade(color, 0.55); x.lineWidth = 6; x.strokeRect(3, 3, cw - 6, ch - 6);
+    const ink = lum(color) > 0.55 ? '#111' : '#fff';
+    const pad = 12, base = Math.min(ch * 0.34, 44);
+    x.fillStyle = ink; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const s1 = fitText(x, num, cw - pad * 2, Math.round(base * 1.25), '700'); x.font = '700 ' + s1 + 'px Roboto, Arial, sans-serif';
+    x.fillText(num, cw / 2, ch * 0.3);
+    const s2 = fitText(x, name, cw - pad * 2, Math.round(base * 0.62), '700'); x.font = '700 ' + s2 + 'px Roboto, Arial, sans-serif';
+    x.fillText(name, cw / 2, ch * 0.62);
+    const s3 = fitText(x, sub, cw - pad * 2, Math.round(base * 0.5), '400'); x.font = '400 ' + s3 + 'px Roboto, Arial, sans-serif';
+    x.fillText(sub, cw / 2, ch * 0.84);
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; texCache.push(t); return t;
+  }
+  function sprite(text, size, color, bg) {
+    const c = document.createElement('canvas'), x = c.getContext('2d'); x.font = '700 48px "Bebas Neue", Roboto, Arial, sans-serif';
+    const w = Math.ceil(x.measureText(text).width) + 28; c.width = w; c.height = 64;
+    x.font = '700 48px "Bebas Neue", Roboto, Arial, sans-serif'; if (bg) { x.fillStyle = bg; x.fillRect(0, 0, w, 64); }
+    x.fillStyle = color; x.textBaseline = 'middle'; x.textAlign = 'center'; x.fillText(text, w / 2, 34);
+    const t = new THREE.CanvasTexture(c); texCache.push(t);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.scale.set(size * w / 64, size, 1); s.renderOrder = 10; return s;
+  }
+  function lines(pts, color, op) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: op != null, opacity: op == null ? 1 : op }));
+  }
+  function clear() {
+    if (root) { root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach(m => m.dispose()); }); scene.remove(root); }
+    texCache.splice(0).forEach(t => t.dispose()); metas = []; cursor = null;
+  }
+  function build(p) {
+    clear(); plan = p; root = new THREE.Group(); scene.add(root);
+    const T = p.truck, L = T.L, W = T.W, H = T.H, metric = p.units === 'metric';
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshLambertMaterial({ color: 0x2b3038 }));
+    floor.rotation.x = -Math.PI / 2; root.add(floor);
+    const gp = [], stepIn = metric ? 100 / 2.54 / 2 : 12;
+    for (let z = stepIn; z < L; z += stepIn) gp.push(-W / 2, 0.2, z - L / 2, W / 2, 0.2, z - L / 2);
+    root.add(lines(gp, 0x48505c, 0.7));
+    const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, L)), new THREE.LineBasicMaterial({ color: 0x7d8796 }));
+    box.position.set(0, H / 2, 0); root.add(box);
+    const wm = new THREE.MeshBasicMaterial({ color: 0x8fa3bf, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false });
+    const nose = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wm); nose.position.set(0, H / 2, -L / 2); root.add(nose);
+    const dw = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wm); dw.rotation.y = Math.PI / 2; dw.position.set(-W / 2, H / 2, 0); root.add(dw);
+    const cw = dw.clone(); cw.position.x = W / 2; root.add(cw);
+    const dW = Math.min(T.doorW || W, W), dH = Math.min(T.doorH || H, H), zD = L / 2 + 0.5;
+    root.add(lines([-dW / 2, 0, zD, -dW / 2, dH, zD, -dW / 2, dH, zD, dW / 2, dH, zD, dW / 2, dH, zD, dW / 2, 0, zD], 0x2f8cff));
+    const ls = Math.max(9, L / 34);
+    const sN = sprite('NOSE', ls, '#cfd6df'); sN.position.set(0, H + ls, -L / 2); root.add(sN);
+    const sD = sprite('DOORS', ls, '#5aa7ff'); sD.position.set(0, H + ls, L / 2); root.add(sD);
+    const sDr = sprite('DRIVER SIDE', ls * 0.8, '#9aa6b5'); sDr.position.set(-W / 2 - ls * 2.6, 2, 0); root.add(sDr);
+    const sC = sprite('CURB SIDE', ls * 0.8, '#9aa6b5'); sC.position.set(W / 2 + ls * 2.4, 2, 0); root.add(sC);
+    const mk = metric ? 100 / 2.54 : 48;
+    for (let d = mk; d < L - mk * 0.3; d += mk) { const s = sprite(metric ? Math.round(d * 2.54 / 100) + ' m' : Math.round(d / 12) + "'", ls * 0.65, '#7d8796'); s.position.set(-W / 2 - ls * 0.9, 1, d - L / 2); root.add(s); }
+    const mats = {};
+    p.boxes.forEach(b => {
+      const side = mats[b.color] || (mats[b.color] = new THREE.MeshLambertMaterial({ color: b.color }));
+      const sub = (b.of > 1 ? b.idx + ' of ' + b.of : '') + (b.short ? (b.of > 1 ? ' · ' : '') + b.short : '');
+      const top = new THREE.MeshLambertMaterial({ map: labelTex(b.color, b.name, sub, '#' + b.seq, b.W, b.L) });
+      const front = new THREE.MeshLambertMaterial({ map: labelTex(b.color, b.name, sub, '#' + b.seq, b.W, b.H) });
+      const big = p.boxes.length > 160;
+      const lside = big ? side : new THREE.MeshLambertMaterial({ map: labelTex(b.color, b.name, sub, '#' + b.seq, b.L, b.H) });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(b.W, b.H, b.L), [lside, lside, top, side, front, side]);
+      m.position.set(b.y + b.W / 2 - W / 2, b.z + b.H / 2, b.x + b.L / 2 - L / 2);
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: 0x0a0a0a }));
+      m.add(e); m.userData = Object.assign({}, b, { _c: [m.position.x, m.position.y, m.position.z, b.W + 1.5, b.H + 1.5, b.L + 1.5] }); root.add(m); metas.push(m);
+    });
+    const barMat = new THREE.MeshLambertMaterial({ color: 0xd3d8df }), padMat = new THREE.MeshLambertMaterial({ color: 0xff7a00 });
+    const strapMat = new THREE.MeshLambertMaterial({ color: 0xffc400 }), ratMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+    (p.restraints || []).forEach(r => {
+      const gr = new THREE.Group(), zc = r.x + r.thick / 2 - L / 2;
+      r.parts.forEach(pt => {
+        if (pt.type === 'bar') {
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, W - 4, 16), barMat); bar.rotation.z = Math.PI / 2; bar.position.set(0, pt.h, zc); gr.add(bar);
+          [-1, 1].forEach(sg => { const pad = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 4), padMat); pad.position.set(sg * (W / 2 - 1), pt.h, zc); gr.add(pad); });
+        } else {
+          const st = new THREE.Mesh(new THREE.BoxGeometry(W - 1, 2, 0.6), strapMat); st.position.set(0, pt.h, zc); gr.add(st);
+          const rat = new THREE.Mesh(new THREE.BoxGeometry(6, 3.5, 2.5), ratMat); rat.position.set(W * 0.18, pt.h, zc); gr.add(rat);
+        }
+      });
+      const top = Math.max.apply(null, r.parts.map(q => q.h)), lab = sprite(r.short, ls * 0.62, '#ffd24d', 'rgba(0,0,0,.55)');
+      lab.position.set(0, top + ls * 0.9, zc); gr.add(lab);
+      gr.userData = Object.assign({}, r, { _c: [0, (top + 4) / 2, zc, W + 2, top + 6, Math.max(4, r.thick + 2)] });
+      root.add(gr); metas.push(gr);
+    });
+    metas.sort((a, b) => a.userData.step - b.userData.step);
+    cursor = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }));
+    cursor.renderOrder = 20; cursor.visible = false; root.add(cursor);
+    step = metas.length; apply(); setView(view, true);
+  }
+  function apply() {
+    let cur = null;
+    const tgt = markStep != null ? markStep : step;
+    metas.forEach(m => { const b = m.userData; m.visible = b.step <= step && (!filterType || filterType === b.typeId); if (b.step === tgt && (markStep != null || step < metas.length)) cur = m; });
+    if (cursor) cursor.material.color.set(markStep != null ? 0x5aa7ff : 0xffffff);
+    if (cursor) { cursor.visible = !!cur; if (cur) { const c = cur.userData._c; cursor.position.set(c[0], c[1], c[2]); cursor.scale.set(c[3], c[4], c[5]); } }
+    render();
+  }
+  function size() { return [Math.max(1, el.clientWidth), Math.max(1, el.clientHeight)]; }
+  function fitOrtho(w, h) {
+    const [cw, ch] = size(), a = cw / ch, m = 1.12; let hw = w * m / 2, hh = h * m / 2;
+    if (hw / hh > a) hh = hw / a; else hw = hh * a;
+    ortho.left = -hw; ortho.right = hw; ortho.top = hh; ortho.bottom = -hh; ortho.zoom = 1; ortho.updateProjectionMatrix();
+  }
+  function setView(v, keep) {
+    view = v || 'iso'; if (!plan) return;
+    const T = plan.truck, L = T.L, W = T.W, H = T.H, D = Math.max(L, W, H) * 3;
+    if (controls) controls.dispose();
+    if (view === 'iso') {
+      cam = persp; const [cw, ch] = size(); persp.aspect = cw / ch; persp.updateProjectionMatrix(); persp.up.set(0, 1, 0);
+      const r = Math.max(L, 2.2 * W) * (cw / ch < 1 ? 1.7 : 1.05);
+      persp.position.set(W * 0.9 + r * 0.42, H * 0.6 + r * 0.55, L / 2 + r * 0.55); persp.lookAt(0, H * 0.25, -L * 0.05);
+    } else {
+      cam = ortho;
+      if (view === 'top') { ortho.up.set(1, 0, 0); ortho.position.set(0, D, 0); fitOrtho(L + 40, W + 60); }
+      else if (view === 'side') { ortho.up.set(0, 1, 0); ortho.position.set(-D, H / 2, 0); fitOrtho(L + 40, H + 40); }
+      else { ortho.up.set(0, 1, 0); ortho.position.set(0, H / 2, D); fitOrtho(W + 80, H + 40); }
+      ortho.lookAt(0, view === 'top' ? 0 : H / 2, 0);
+    }
+    if (THREE.OrbitControls && opts.interactive !== false) {
+      controls = new THREE.OrbitControls(cam, renderer.domElement);
+      controls.target.set(0, view === 'iso' ? H * 0.25 : view === 'top' ? 0 : H / 2, view === 'iso' ? -L * 0.05 : 0);
+      controls.enableRotate = view === 'iso'; controls.screenSpacePanning = true; controls.maxPolarAngle = Math.PI / 2 - 0.02;
+      controls.addEventListener('change', render); controls.update();
+    }
+    render();
+  }
+  function render() { const [w, h] = size(); renderer.setSize(w, h, false); if (cam === persp) { persp.aspect = w / h; persp.updateProjectionMatrix(); } renderer.render(scene, cam); }
+  const ro = new ResizeObserver(() => { if (view !== 'iso') setView(view); else render(); }); ro.observe(el);
+  let down = null;
+  renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || !opts.onPick) return;
+    const r = renderer.domElement.getBoundingClientRect(), v = new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+    const rc = new THREE.Raycaster(); rc.setFromCamera(v, cam);
+    const hit = rc.intersectObjects(metas.filter(m => m.visible), true).find(h => h.object.type !== 'LineSegments' && h.object.type !== 'Sprite');
+    let o = hit && hit.object; while (o && o.userData.step == null) o = o.parent;
+    opts.onPick(o ? o.userData : null);
+  });
+  return {
+    setPlan: build, setView, render,
+    get view() { return view; }, get step() { return step; },
+    setStep(n) { step = Math.max(0, Math.min(metas.length, n | 0)); apply(); },
+    filter(t) { filterType = t || null; apply(); },
+    mark(n) { markStep = n == null ? null : n; apply(); },
+    snapshot(w, h, v, st, fmt) {
+      const ov = view, os = step, of = filterType, om = markStep; markStep = null; el.style.width = w + 'px'; el.style.height = h + 'px';
+      renderer.setPixelRatio(1); filterType = null; if (st != null) step = st; setView(v || ov); apply();
+      const url = fmt === 'jpeg' ? renderer.domElement.toDataURL('image/jpeg', 0.88) : renderer.domElement.toDataURL('image/png');
+      el.style.width = ''; el.style.height = ''; renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      step = os; filterType = of; markStep = om; setView(ov); apply(); return url;
+    }
+  };
+}
+
+{
+const LOGO = 'data:image/png;base64,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';
+const PRESETS = [
+  { k: 'van', name: 'Cargo van, high roof', L: 172, W: 70, H: 79, doorW: 61, doorH: 71, payload: 3500 },
+  { k: 'box16', name: "16' box truck", L: 192, W: 92, H: 90, doorW: 84, doorH: 82, payload: 5500 },
+  { k: 'box20', name: "20' box truck", L: 240, W: 96, H: 96, doorW: 88, doorH: 88, payload: 7000 },
+  { k: 'box24', name: "24' box truck", L: 288, W: 97, H: 97, doorW: 92, doorH: 90, payload: 10000 },
+  { k: 'box26', name: "26' box truck", L: 311, W: 97, H: 103, doorW: 92, doorH: 96, payload: 10000 },
+  { k: 'tr48', name: "48' trailer", L: 570, W: 100, H: 110, doorW: 98, doorH: 106, payload: 44000 },
+  { k: 'tr53', name: "53' trailer", L: 630, W: 100, H: 110, doorW: 98, doorH: 106, payload: 44000 },
+  { k: 'custom', name: 'Custom size' }
+];
+const PAL = ['#e6194b', '#3cb44b', '#ffe119', '#4f8ef7', '#f58231', '#a05ad8', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9a6324', '#fffac8', '#b5121b', '#aaffc3', '#808000', '#ffd8b1', '#7f8cff', '#a9a9a9'];
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const RULES0 = { gap: 0, support: 75, heavyBottom: true, strictGroups: false, maxStack: 0 };
+function sample() {
+  const c = (name, l, w, h, wt, qty, group, o) => Object.assign({ id: uid(), name, l, w, h, wt, qty, group, rotate: true, stack: true, sitOn: 'same', truckId: 'auto' }, o || {});
+  const list = [
+    c('Cable trunk', 48, 24, 30, 300, 6, 1), c('LED panel case', 44, 26, 34, 360, 4, 1, { maxStack: 2 }), c('Power distro rack', 30, 24, 48, 400, 2, 1),
+    c('Moving light 2-pack', 48, 27, 39, 320, 6, 2, { maxStack: 2 }), c('Line array 4-pack', 50, 30, 36, 420, 2, 2), c('LED wash 4-pack', 46, 24, 30, 260, 4, 2),
+    c('Lighting console', 60, 30, 22, 180, 1, 3, { stack: false, sitOn: 'floor' }), c('Video rack 8RU', 30, 24, 22, 150, 2, 3), c('Chain motor 1T', 24, 20, 26, 140, 8, 4)
+  ];
+  list.forEach((x, i) => x.color = PAL[i % PAL.length]); return list;
+}
+function newTruck(n, key) { const p = PRESETS.find(p => p.k === (key && key !== 'custom' ? key : 'box26')); return { id: uid(), name: 'Truck ' + n, truckKey: p.k, truck: Object.assign({}, p), restraints: {}, pins: null }; }
+function fresh(withSample) {
+  const t = newTruck(1); if (withSample) t.restraints = { 1: 'bar2', 2: 'strap2', 4: 'bar1' };
+  return { job: withSample ? 'Sample: Ballroom general session' : '', units: 'imperial', trucks: [t], activeId: t.id, cases: withSample ? sample() : [], rules: Object.assign({}, RULES0), planId: null, isSample: !!withSample };
+}
+function normalize(o) {
+  if (!Array.isArray(o.trucks) || !o.trucks.length) {
+    o.trucks = [{ id: uid(), name: 'Truck 1', truckKey: o.truckKey || 'box26', truck: o.truck || Object.assign({}, PRESETS[4]), restraints: o.restraints || {}, pins: null }];
+    delete o.truck; delete o.truckKey; delete o.restraints;
+  }
+  o.trucks.forEach(t => { t.restraints = t.restraints || {}; if (t.pins === undefined) t.pins = null; });
+  if (!o.trucks.some(t => t.id === o.activeId)) o.activeId = o.trucks[0].id;
+  o.cases = Array.isArray(o.cases) ? o.cases : []; o.rules = Object.assign({}, RULES0, o.rules || {});
+  return o;
+}
+let S = fresh(true);
+try { const d = JSON.parse(localStorage.getItem('tp-draft') || 'null'); if (d && Array.isArray(d.cases)) S = normalize(d); } catch (e) { }
+const AT = () => S.trucks.find(t => t.id === S.activeId) || S.trucks[0];
+const multi = () => S.trucks.length > 1;
+const hist = [];
+let result = null, plan = null, plans = [], unplacedAll = [], viewer = null, dl = null, db = null, plansUnsub = null, playT = null, sel = null;
+
+const met = () => S.units === 'metric';
+const r1 = n => Math.round(n * 10) / 10, r2 = n => Math.round(n * 100) / 100;
+const lenOut = i => i == null || i === '' ? '' : r1(met() ? i * 2.54 : i);
+const lenIn = v => v === '' ? '' : (met() ? +v / 2.54 : +v);
+const wtOut = w => w == null || w === '' ? '' : r1(met() ? w * 0.45359237 : w);
+const wtIn = v => v === '' ? '' : (met() ? +v / 0.45359237 : +v);
+const uL = () => met() ? 'cm' : 'in', uW = () => met() ? 'kg' : 'lb';
+function fmtLen(i) {
+  if (i == null) return '–';
+  if (met()) { const cm = i * 2.54; return cm >= 100 ? (cm / 100).toFixed(2) + ' m' : Math.round(cm) + ' cm'; }
+  const t = Math.round(i), f = Math.floor(t / 12), n = t % 12; return f ? f + "' " + n + '"' : n + '"';
+}
+const fmtDim = (a, b, c) => [a, b, c].map(v => Math.round(met() ? v * 2.54 : v)).join(' × ') + ' ' + uL();
+const fmtWt = w => w == null ? '–' : Math.round(met() ? w * 0.45359237 : w).toLocaleString() + ' ' + uW();
+const typeOf = id => S.cases.find(c => c.id === id);
+const keyOf = b => b.typeId + '#' + b.idx;
+function ranges(a) { a = [...a].sort((x, y) => x - y); const out = []; for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i ? a[i] + '–' + a[j] : String(a[i])); i = j; } return out.join(', '); }
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600); }
+function snapshot() { return JSON.stringify({ job: S.job, units: S.units, trucks: S.trucks, cases: S.cases, rules: S.rules }); }
+function persist() { try { localStorage.setItem('tp-draft', JSON.stringify(S)); } catch (e) { } }
+function commit() { const s = snapshot(); if (hist[hist.length - 1] !== s) { hist.push(s); if (hist.length > 80) hist.shift(); } $('#undoBtn').disabled = hist.length < 2; persist(); }
+function undo() { if (hist.length < 2) return; hist.pop(); Object.assign(S, JSON.parse(hist[hist.length - 1])); normalize(S); sel = null; renderAll(); $('#undoBtn').disabled = hist.length < 2; persist(); toast('Undone'); }
+
+/* ---------- Trucks + rules ---------- */
+function renderTruck() {
+  const tr = AT(), t = tr.truck, i = S.trucks.indexOf(tr);
+  $('#truckSel').innerHTML = PRESETS.map(p => `<option value="${p.k}">${esc(p.name)}</option>`).join('');
+  $('#truckSel').value = tr.truckKey; $('#tName').value = tr.name;
+  $('#truckH').textContent = multi() ? 'Truck ' + (i + 1) + ' of ' + S.trucks.length : 'Truck';
+  $('#rmTruck').hidden = !multi(); $('#rmTruck').dataset.sure = ''; $('#rmTruck').textContent = 'Remove this truck';
+  $('#tL').value = lenOut(t.L); $('#tW').value = lenOut(t.W); $('#tH').value = lenOut(t.H);
+  $('#tDW').value = lenOut(t.doorW); $('#tDH').value = lenOut(t.doorH); $('#tP').value = wtOut(t.payload);
+  $$('.u').forEach(e => e.textContent = uL()); $$('.uw').forEach(e => e.textContent = uW());
+  $('#truckCap').textContent = fmtLen(t.L) + ' × ' + fmtLen(t.W) + ' × ' + fmtLen(t.H);
+  $('#units').value = S.units;
+  $('#rGap').value = lenOut(S.rules.gap); $('#rMax').value = S.rules.maxStack ? lenOut(S.rules.maxStack) : ''; $('#rSup').value = S.rules.support;
+  $('#rHeavy').checked = !!S.rules.heavyBottom; $('#rStrict').checked = !!S.rules.strictGroups;
+  $('#jobName').value = S.job || '';
+}
+$('#truckSel').addEventListener('change', e => {
+  const tr = AT(), p = PRESETS.find(p => p.k === e.target.value); tr.truckKey = p.k;
+  if (p.k !== 'custom') tr.truck = Object.assign({}, p); else tr.truck = Object.assign({}, tr.truck, { name: 'Custom size', k: 'custom' });
+  renderTruck(); repack(); commit();
+});
+$('#tName').addEventListener('input', e => { AT().name = e.target.value || 'Truck'; if (plan) plan.name = AT().name; renderTabs(); });
+$('#tName').addEventListener('change', () => { renderCases(); repack(); commit(); });
+[['tL', 'L'], ['tW', 'W'], ['tH', 'H'], ['tDW', 'doorW'], ['tDH', 'doorH']].forEach(([id, k]) => {
+  $('#' + id).addEventListener('input', e => { const v = lenIn(e.target.value); if (v > 0) { AT().truck[k] = v; markCustom(); repackSoon(); } });
+  $('#' + id).addEventListener('change', commit);
+});
+$('#tP').addEventListener('input', e => { AT().truck.payload = wtIn(e.target.value) || 0; markCustom(); repackSoon(); });
+$('#tP').addEventListener('change', commit);
+function markCustom() { const tr = AT(); if (tr.truckKey !== 'custom') { tr.truckKey = 'custom'; tr.truck.name = 'Custom (' + (PRESETS.find(p => p.k === tr.truck.k) || {}).name + ')'; $('#truckSel').value = 'custom'; } $('#truckCap').textContent = fmtLen(tr.truck.L) + ' × ' + fmtLen(tr.truck.W) + ' × ' + fmtLen(tr.truck.H); }
+$('#rmTruck').addEventListener('click', e => {
+  const b = e.currentTarget; if (!multi()) return;
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Remove ' + AT().name + '?'; return; }
+  const gone = AT(); S.trucks = S.trucks.filter(t => t !== gone); S.cases.forEach(c => { if (c.truckId === gone.id) c.truckId = 'auto'; });
+  S.activeId = S.trucks[0].id; sel = null; renderAll(); commit(); toast(gone.name + ' removed. Its cases are back on Auto.');
+});
+function addTruck() {
+  const t = newTruck(S.trucks.length + 1, AT().truckKey); S.trucks.push(t); S.activeId = t.id; sel = null;
+  renderAll(); commit(); toast(t.name + ' added. Cases on Auto fill the trucks in order.');
+}
+$('#units').addEventListener('change', e => { S.units = e.target.value; renderAll(); commit(); });
+$('#rGap').addEventListener('input', e => { S.rules.gap = Math.max(0, lenIn(e.target.value) || 0); repackSoon(); });
+$('#rMax').addEventListener('input', e => { S.rules.maxStack = Math.max(0, lenIn(e.target.value) || 0); repackSoon(); });
+$('#rSup').addEventListener('input', e => { S.rules.support = Math.min(100, Math.max(50, +e.target.value || 75)); repackSoon(); });
+$('#rHeavy').addEventListener('change', e => { S.rules.heavyBottom = e.target.checked; repack(); commit(); });
+$('#rStrict').addEventListener('change', e => { S.rules.strictGroups = e.target.checked; repack(); commit(); });
+['rGap', 'rMax', 'rSup'].forEach(id => $('#' + id).addEventListener('change', commit));
+$('#jobName').addEventListener('input', e => { S.job = e.target.value; persist(); });
+$('#jobName').addEventListener('change', commit);
+
+function renderTabs() {
+  $('#ttabs').innerHTML = plans.map(p => `<button class="ttab" data-tid="${esc(p.id)}" aria-pressed="${p.id === S.activeId}"><b>${esc(p.name)}</b><small>${esc(p.truck.name)} · ${p.boxes.length} case${p.boxes.length === 1 ? '' : 's'}${p.manual ? ' · hand-adjusted' : ''}</small></button>`).join('')
+    + `<button class="ttab add" data-add>+ Add truck</button>`;
+  $('#xScope').hidden = !multi();
+}
+$('#ttabs').addEventListener('click', e => {
+  if (e.target.closest('[data-add]')) return addTruck();
+  const b = e.target.closest('[data-tid]'); if (!b || b.dataset.tid === S.activeId) return;
+  S.activeId = b.dataset.tid; sel = null; persist(); showActive();
+});
+
+/* ---------- Cases ---------- */
+function caseRow(c) {
+  const tsel = multi() ? `<label>Truck <select data-k="truckId" aria-label="Truck for ${esc(c.name)}">${[['auto', 'Auto (fill in order)']].concat(S.trucks.map(t => [t.id, t.name])).map(([v, t]) => `<option value="${esc(v)}" ${(S.trucks.some(x => x.id === c.truckId) ? c.truckId : 'auto') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : '';
+  return `<div class="case" data-id="${esc(c.id)}" style="--c:${esc(c.color)}">
+  <div class="r1"><input type="color" data-k="color" value="${esc(c.color)}" aria-label="Color for ${esc(c.name)}">
+  <input class="nm" data-k="name" value="${esc(c.name)}" placeholder="Case name" aria-label="Case name">
+  <label>Qty<input type="number" min="0" step="1" data-k="qty" value="${esc(c.qty)}" inputmode="numeric"></label>
+  <button class="del" data-del aria-label="Remove ${esc(c.name)}">×</button></div>
+  <div class="r2">
+   <label>Length<input type="number" step="any" min="0" data-k="l" value="${lenOut(c.l)}" inputmode="decimal"></label>
+   <label>Width<input type="number" step="any" min="0" data-k="w" value="${lenOut(c.w)}" inputmode="decimal"></label>
+   <label>Height<input type="number" step="any" min="0" data-k="h" value="${lenOut(c.h)}" inputmode="decimal"></label>
+   <label>Weight<input type="number" step="any" min="0" data-k="wt" value="${wtOut(c.wt)}" placeholder="opt." inputmode="decimal"></label>
+   <label>Order<input type="number" step="1" min="1" data-k="group" value="${esc(c.group)}" inputmode="numeric"></label>
+  </div>
+  <div class="r3"><label><input type="checkbox" data-k="rotate" ${c.rotate !== false ? 'checked' : ''}> Can turn sideways</label>
+  <label><input type="checkbox" data-k="stack" ${c.stack !== false ? 'checked' : ''}> Cases can stack on top</label>
+  <label>Max stack <input type="number" min="1" step="1" data-k="maxStack" value="${esc(c.maxStack || '')}" placeholder="Any" inputmode="numeric" class="mini" aria-label="Most cases high for ${esc(c.name)}"></label>
+  <label>Sits on <select data-k="sitOn" aria-label="What ${esc(c.name)} can sit on">${[['same', 'Same case only'], ['any', 'Any case'], ['floor', 'Floor only']].map(([v, t]) => `<option value="${v}" ${(c.sitOn || 'same') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+  ${tsel}<span class="where" data-where></span><span class="note" data-note></span></div></div>`;
+}
+function renderCases() {
+  $('#cases').innerHTML = S.cases.length ? S.cases.map(caseRow).join('') : '<p class="hint">No cases yet. Add a case type or paste a list from a spreadsheet.</p>';
+  const n = S.cases.reduce((a, c) => a + (+c.qty || 0), 0);
+  $('#caseCap').textContent = S.cases.length + ' types · ' + n + ' cases · dims in ' + uL();
+  $('#sampleNote').style.display = S.isSample ? '' : 'none';
+  $('#truckHint').hidden = !multi();
+}
+$('#cases').addEventListener('input', e => {
+  const row = e.target.closest('.case'), k = e.target.dataset.k; if (!row || !k) return;
+  const c = typeOf(row.dataset.id); if (!c) return; const v = e.target.value;
+  if (k === 'name') c.name = v;
+  else if (k === 'color') { c.color = v; row.style.setProperty('--c', v); }
+  else if (k === 'rotate' || k === 'stack') c[k] = e.target.checked;
+  else if (k === 'sitOn' || k === 'truckId') c[k] = v;
+  else if (k === 'maxStack') c.maxStack = parseInt(v) > 0 ? parseInt(v) : '';
+  else if (k === 'wt') c.wt = v === '' ? '' : wtIn(v);
+  else if (k === 'qty' || k === 'group') c[k] = Math.max(k === 'group' ? 1 : 0, parseInt(v) || 0);
+  else c[k] = lenIn(v) || 0;
+  S.isSample = false; repackSoon();
+});
+$('#cases').addEventListener('change', commit);
+$('#cases').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  const id = b.closest('.case').dataset.id; S.cases = S.cases.filter(c => c.id !== id);
+  renderCases(); repack(); commit(); toast('Case type removed. Undo brings it back.');
+});
+function nextColor() { const used = new Set(S.cases.map(c => c.color)); return PAL.find(p => !used.has(p)) || PAL[S.cases.length % PAL.length]; }
+const blankCase = o => Object.assign({ id: uid(), name: 'New case', l: 0, w: 0, h: 0, wt: '', qty: 1, group: 1, rotate: true, stack: true, sitOn: 'same', truckId: 'auto', color: nextColor() }, o || {});
+$('#addBtn').addEventListener('click', () => {
+  S.cases.push(blankCase()); S.isSample = false; renderCases(); commit();
+  const ins = $$('.case .nm'); const last = ins[ins.length - 1]; last.focus(); last.select();
+});
+function openM(id) { $(id).classList.add('on'); const f = $(id).querySelector('textarea,button'); if (f) f.focus(); }
+function closeM() { $$('.modal').forEach(m => m.classList.remove('on')); }
+$$('[data-close]').forEach(b => b.addEventListener('click', closeM));
+$$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeM(); }));
+const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($$('.modal.on').length) return closeM(); if (sel) { sel = null; renderAdj(); } return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !typing()) { e.preventDefault(); undo(); return; }
+  if (typing() || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (sel) {
+    const m = { ArrowLeft: 'nose', ArrowRight: 'doors', ArrowUp: 'driver', ArrowDown: 'curb', r: 'rot', R: 'rot' }[e.key];
+    if (m) { e.preventDefault(); adjust(m); } return;
+  }
+  if (e.key === 'ArrowRight') stepBy(1); if (e.key === 'ArrowLeft') stepBy(-1);
+});
+$('#pasteBtn').addEventListener('click', () => { $('#pasteMsg').textContent = ''; openM('#pasteM'); });
+$('#pasteGo').addEventListener('click', () => {
+  const rows = $('#pasteTx').value.split(/\r?\n/).map(r => r.split(r.includes('\t') ? '\t' : ',').map(s => s.trim())).filter(r => r.length >= 4 && r[0]);
+  let added = 0, skipped = 0;
+  rows.forEach(r => {
+    const [name, l, w, h, wt, q] = r; const n = [l, w, h].map(parseFloat);
+    if (n.some(x => !(x > 0))) { skipped++; return; }
+    S.cases.push(blankCase({ name, l: lenIn(n[0]), w: lenIn(n[1]), h: lenIn(n[2]), wt: wt && parseFloat(wt) > 0 ? wtIn(parseFloat(wt)) : '', qty: Math.max(1, parseInt(q) || 1) }));
+    added++;
+  });
+  if (!added) { $('#pasteMsg').textContent = 'No rows with a name and three dimensions were found.'; return; }
+  S.isSample = false; renderCases(); repack(); commit(); closeM(); $('#pasteTx').value = '';
+  toast(added + ' case type' + (added > 1 ? 's' : '') + ' added' + (skipped ? ', ' + skipped + ' row' + (skipped > 1 ? 's' : '') + ' skipped' : ''));
+});
+
+/* ---------- Restraints ---------- */
+const RC = { none: { t: 0, label: 'None', parts: [] }, bar1: { t: 3, label: '1 load bar', parts: ['bar'] }, bar2: { t: 3, label: '2 load bars', parts: ['bar', 'bar'] }, strap1: { t: 1, label: '1 ratchet strap', parts: ['strap'] }, strap2: { t: 1, label: '2 ratchet straps', parts: ['strap', 'strap'] }, barstrap: { t: 3, label: 'Load bar + ratchet strap', parts: ['bar', 'strap'] } };
+function groupsHere() {
+  const tr = AT(), gs = new Set(plan ? plan.boxes.map(b => b.grp) : []);
+  S.cases.forEach(c => { if (+c.qty > 0 && (c.truckId === tr.id || (!multi() && true))) gs.add(+c.group || 1); });
+  return [...gs].sort((a, b) => a - b);
+}
+let rsKey = '';
+function renderRestraints(force) {
+  const tr = AT(), gs = groupsHere(), key = tr.id + '|' + gs.join(',') + '|' + JSON.stringify(tr.restraints);
+  if (!force && key === rsKey) return; rsKey = key;
+  $('#rsH').textContent = multi() ? 'Load bars and straps · ' + tr.name : 'Load bars and straps';
+  $('#rsl').innerHTML = gs.length ? gs.map((g, i) => `<label class="f">After order ${g}${i === gs.length - 1 ? ' (last group, at the doors)' : ''}<select data-g="${g}">${Object.entries(RC).map(([k, v]) => `<option value="${k}" ${(tr.restraints[g] || 'none') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>`).join('') : '<p class="hint">No cases in this truck yet.</p>';
+}
+$('#rsl').addEventListener('change', e => { const g = e.target.dataset.g; if (!g) return; const tr = AT(); if (e.target.value === 'none') delete tr.restraints[g]; else tr.restraints[g] = e.target.value; S.isSample = false; repack(); commit(); });
+$$('[data-bulk]').forEach(b => b.addEventListener('click', () => { S.cases.forEach(c => c.sitOn = b.dataset.bulk); renderCases(); repack(); commit(); toast('Every case set to sit on: ' + b.textContent.toLowerCase()); }));
+const hText = r => 'at ' + r.parts.map(p => fmtLen(p.h)).join(' and ') + ' off the floor';
+
+/* ---------- Packing ---------- */
+function sideOf(b, T) { const d = b.y < 2, c = b.y + b.W > T.W - 3; return d && c ? 'Full width' : d ? 'Driver wall' : c ? 'Curb wall' : 'Center'; }
+const isAuto = c => !c.truckId || c.truckId === 'auto' || !S.trucks.some(t => t.id === c.truckId);
+function buildPlans() {
+  const units = {}; S.cases.forEach(c => units[c.id] = Array.from({ length: Math.max(0, Math.floor(+c.qty || 0)) }, (_, i) => i + 1));
+  const reserved = {};
+  S.trucks.forEach(tr => {
+    if (!tr.pins) return;
+    Object.keys(tr.pins).forEach(k => { const [id, i] = k.split('#'), c = typeOf(id); if (!c || reserved[k] || !(isAuto(c) || c.truckId === tr.id) || !units[id].includes(+i)) return; reserved[k] = tr.id; });
+  });
+  plans = []; unplacedAll = [];
+  S.trucks.forEach((tr, ti) => {
+    const last = ti === S.trucks.length - 1;
+    const types = S.cases.filter(c => isAuto(c) || c.truckId === tr.id).map(c => Object.assign({}, c, { capped: isAuto(c) && !last, of: +c.qty, units: units[c.id].filter(i => { const r = reserved[c.id + '#' + i]; return !r || r === tr.id; }) })).filter(t => t.units.length);
+    const pins = tr.pins ? Object.entries(tr.pins).filter(([k]) => reserved[k] === tr.id).map(([k, p]) => { const [type, idx] = k.split('#'); return Object.assign({ type, idx: +idx }, p); }) : [];
+    const rt = {}; Object.entries(tr.restraints || {}).forEach(([g, k]) => { if (RC[k] && RC[k].t) rt[g] = RC[k].t; });
+    const res = packTruck(tr.truck, types, { gap: S.rules.gap, support: S.rules.support / 100, heavyBottom: S.rules.heavyBottom, strictGroups: S.rules.strictGroups, maxStack: S.rules.maxStack, restraints: rt, pins, payloadCap: last ? 0 : (+tr.truck.payload || 0) });
+    res.placed.forEach(p => units[p.type] = units[p.type].filter(i => i !== p.idx));
+    res.unplaced.forEach(u => { const c = typeOf(u.type); if (!isAuto(c) || last) { unplacedAll.push(Object.assign({ truck: isAuto(c) ? null : tr.name }, u)); units[u.type] = units[u.type].filter(i => i !== u.idx); } });
+    plans.push(makePlan(tr, res));
+  });
+  plan = plans.find(p => p.id === S.activeId) || plans[0]; result = plan.res;
+}
+function makePlan(tr, res) {
+  const T = tr.truck;
+  const boxes = res.placed.map(p => {
+    const t = typeOf(p.type);
+    return { kind: 'case', level: p.level, grp: p.grp, seq: p.seq, typeId: p.type, name: t.name || 'Case', color: t.color, idx: p.idx, of: p.of, x: p.x, y: p.y, z: p.z, L: p.L, W: p.W, H: p.H, wt: p.wt, on: p.on, rotated: p.rotated, pinned: p.pinned, side: sideOf(p, T), short: '' };
+  });
+  const rs = res.restraints.map(r => {
+    const c = RC[tr.restraints[r.grp]] || RC.bar1, fh = r.faceH || 24, fr = c.parts.length === 1 ? [0.6] : [0.35, 0.8];
+    return { kind: 'restraint', grp: r.grp, x: r.x, thick: r.thick, faceH: r.faceH, fits: r.fits, label: c.label, short: c.label.toUpperCase(), parts: c.parts.map((t, i) => ({ type: t, h: Math.max(6, Math.min(T.H - 4, fh * fr[i])) })), after: boxes.reduce((m, b) => b.grp <= r.grp ? Math.max(m, b.seq) : m, 0) };
+  });
+  const steps = []; let k = 0;
+  rs.filter(r => r.after === 0).forEach(r => { r.step = ++k; steps.push(r); });
+  boxes.forEach(b => { b.step = ++k; steps.push(b); rs.filter(r => r.after === b.seq).forEach(r => { r.step = ++k; steps.push(r); }); });
+  const legend = S.cases.filter(c => +c.qty > 0).map(c => { const mine = boxes.filter(b => b.typeId === c.id); return { id: c.id, name: c.name, color: c.color, qty: +c.qty, placed: mine.length, units: mine.map(b => b.idx), dims: fmtDim(c.l, c.w, c.h), wt: c.wt === '' ? null : c.wt }; }).filter(l => !multi() || l.placed > 0);
+  return { id: tr.id, name: tr.name, manual: !!tr.pins, res, restraints: rs, steps, job: S.job, units: S.units, truck: { name: T.name, L: T.L, W: T.W, H: T.H, doorW: T.doorW, doorH: T.doorH, payload: T.payload }, boxes, legend, stats: res.stats, created: new Date().toLocaleString() };
+}
+let soonT = null;
+function repackSoon() { clearTimeout(soonT); soonT = setTimeout(repack, 260); }
+function repack() {
+  const keepStep = sel ? null : null;
+  buildPlans(); renderTabs(); renderRestraints(); renderStats(); renderSeq(); renderLegend(); renderByTruck();
+  if (viewer) viewer.setPlan(plan);
+  setStep(plan.steps.length); renderAdj();
+  $$('.case').forEach(r => {
+    const id = r.dataset.id, miss = unplacedAll.filter(u => u.type === id);
+    r.querySelector('[data-note]').textContent = miss.length ? miss.length + ' not loaded: ' + miss[0].reason.toLowerCase() : '';
+    r.querySelector('[data-where]').textContent = multi() ? plans.map(p => { const n = p.boxes.filter(b => b.typeId === id).length; return n ? p.name + ': ' + n : ''; }).filter(Boolean).join(' · ') : '';
+    r.classList.toggle('bad', miss.length > 0);
+  });
+}
+function showActive() {
+  plan = plans.find(p => p.id === S.activeId) || plans[0]; result = plan.res;
+  renderTruck(); renderTabs(); renderRestraints(true); renderStats(); renderSeq(); renderLegend();
+  iso = null; if (viewer) { viewer.filter(null); viewer.setPlan(plan); }
+  setStep(plan.steps.length); renderAdj();
+}
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+function planWarnings(pl) {
+  const w = [], s = pl.stats, T = pl.truck, pay = T.payload || 0, who = multi() ? pl.name + ': ' : '';
+  pl.restraints.filter(r => !r.fits).forEach(r => w.push(`${who}no room for the ${r.label.toLowerCase()} after order ${r.grp}.`));
+  if (pay && s.weight > pay) w.push(`${who}over payload by ${fmtWt(s.weight - pay)}. Move some cases to another truck or use a bigger one.`);
+  if (s.cgX != null && Math.abs(s.cgY - T.W / 2) > 4) w.push(`${who}load leans ${fmtLen(Math.abs(s.cgY - T.W / 2))} toward the ${s.cgY < T.W / 2 ? 'driver' : 'curb'} side. Consider swapping heavy cases across.`);
+  if (s.count && s.weightKnown < s.count) w.push(`${who}${s.count - s.weightKnown} case${s.count - s.weightKnown > 1 ? 's have' : ' has'} no weight, so weight and balance are incomplete.`);
+  return w.map(x => x.charAt(0).toUpperCase() + x.slice(1));
+}
+function unplacedWarnings() {
+  const agg = {};
+  unplacedAll.forEach(u => { const k = u.type + '|' + u.reason + '|' + (u.truck || ''); agg[k] = (agg[k] || 0) + 1; });
+  return Object.entries(agg).map(([k, n]) => { const [id, r, t] = k.split('|'); return `${n} × ${(typeOf(id) || {}).name}${t && multi() ? ' (set to ' + t + ')' : ''}: ${r.toLowerCase()}.`; });
+}
+function renderStats() {
+  const s = result.stats, T = plan.truck, pay = T.payload || 0;
+  const totalQty = S.cases.reduce((a, c) => a + Math.max(0, Math.floor(+c.qty || 0)), 0), totalPlaced = plans.reduce((a, p) => a + p.boxes.length, 0);
+  const tiles = [
+    multi() ? ['Cases in this truck', `${s.count}<small>${totalPlaced} of ${totalQty} loaded across ${S.trucks.length} trucks</small>`, pct(totalPlaced, totalQty), totalPlaced < totalQty]
+      : ['Cases loaded', `${s.count}<small> of ${totalQty}</small>`, pct(s.count, totalQty), s.count < totalQty],
+    ['Floor length used', `${fmtLen(s.usedL)}<small> of ${fmtLen(T.L)}</small>`, pct(s.usedL, T.L), false],
+    ['Cube used', `${pct(s.volume, s.truckVol)}%<small> of the box</small>`, pct(s.volume, s.truckVol), false],
+    ['Load weight', `${fmtWt(s.weight)}${pay ? `<small> of ${fmtWt(pay)}</small>` : ''}`, pct(s.weight, pay), pay && s.weight > pay],
+  ];
+  let cg = '–', cgSub = 'Add weights to see balance';
+  if (s.cgX != null) { cg = fmtLen(s.cgX); const off = s.cgY - T.W / 2; cgSub = pct(s.cgX, T.L) + '% back from nose · ' + (Math.abs(off) < 1 ? 'centered' : fmtLen(Math.abs(off)) + ' toward ' + (off < 0 ? 'driver' : 'curb')); }
+  $('#stats').innerHTML = tiles.map(([k, v, p, over]) => `<div class="st"><div class="k">${k}</div><div class="v">${v}</div><div class="meter ${over ? 'over' : ''}"><i style="width:${Math.min(100, p)}%"></i></div></div>`).join('')
+    + `<div class="st"><div class="k">Center of weight from nose</div><div class="v">${cg}</div><div class="k" style="margin-top:6px">${esc(cgSub)}</div></div>`;
+  const w = unplacedWarnings().concat(planWarnings(plan), plans.filter(p => p !== plan && p.truck.payload && p.stats.weight > p.truck.payload).map(p => `${p.name} is over payload by ${fmtWt(p.stats.weight - p.truck.payload)}.`));
+  $('#warns').innerHTML = w.length ? w.map(x => `<li>${esc(x)}</li>`).join('') : (totalQty ? `<li class="okk">Everything fits${multi() ? ' across the trucks' : ''}, within payload.</li>` : '');
+  $('#manual').hidden = !plan.manual;
+}
+const facing = b => Math.abs(b.L - b.W) < 0.5 ? 'Square' : b.W > b.L ? 'Across the truck' : 'Along the truck';
+function posText(b) { return fmtLen(b.x) + ' from nose, ' + b.side.toLowerCase() + ', ' + (b.z < 0.5 ? 'on the floor' : 'on top of #' + b.on.join(', #')); }
+function renderSeq() {
+  $('#seqH').textContent = multi() ? 'Load sequence · ' + plan.name : 'Load sequence';
+  const rows = plan.steps.map(b => b.kind === 'restraint' ? `<tr class="rs" data-step="${b.step}"><td class="n"></td><td>${b.parts.map(p => `<span class="bar ${p.type === 'strap' ? 's' : ''}"></span>`).join('')}Install ${esc(b.label.toLowerCase())}</td><td>Across the truck, ${hText(b)}</td><td></td><td class="n"></td><td class="n">${fmtLen(b.x)}</td><td>Full width</td><td>Behind order ${b.grp}</td><td></td></tr>` : `<tr data-step="${b.step}"><td class="n">${b.seq}</td><td><span class="sw" style="--c:${esc(b.color)}"></span>${esc(b.name)} <span style="color:var(--mute)">${b.of > 1 ? b.idx + ' of ' + b.of : ''}</span>${b.pinned && plan.manual ? '' : ''}</td><td>${fmtDim(b.L, b.W, b.H)}</td><td>${facing(b)}</td><td class="n">${fmtWt(b.wt)}</td><td class="n">${fmtLen(b.x)}</td><td>${b.side}</td><td>${b.z < 0.5 ? 'Floor' : 'On #' + b.on.join(', #') + ' (' + b.level + ' high)'}</td><td><button class="btn sm" data-adj="${esc(keyOf(b))}">Adjust</button></td></tr>`);
+  $('#seqT tbody').innerHTML = rows.join('') || '<tr><td colspan="9">Nothing loaded in this truck yet.</td></tr>';
+}
+let iso = null;
+function renderLegend() {
+  $('#legend').innerHTML = plan.legend.map(l => `<button class="chip" data-t="${esc(l.id)}" aria-pressed="${iso === l.id}" style="--c:${esc(l.color)}"><i></i>${esc(l.name)} <span style="color:var(--mute)">${multi() ? '×' + l.placed : l.placed + '/' + l.qty}</span></button>`).join('');
+}
+$('#legend').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; iso = iso === c.dataset.t ? null : c.dataset.t; renderLegend(); if (viewer) viewer.filter(iso); });
+$('#seqT').addEventListener('click', e => { const ab = e.target.closest('[data-adj]'); if (ab) { selectCase(ab.dataset.adj); $('#vp').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; } const tr = e.target.closest('tr[data-step]'); if (tr) { if (sel) { sel = null; renderAdj(); } setStep(+tr.dataset.step); $('#vp').scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+function renderByTruck() {
+  $('#byTruck').hidden = !multi(); if (!multi()) return;
+  $('#byT tbody').innerHTML = plans.map(p => `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.truck.name)}</td><td class="n">${p.boxes.length}</td><td class="n">${fmtWt(p.stats.weight)}${p.truck.payload ? ' of ' + fmtWt(p.truck.payload) : ''}</td><td class="n">${fmtLen(p.stats.usedL)} of ${fmtLen(p.truck.L)}</td><td>${p.legend.map(l => `<span class="mini-chip"><span class="sw" style="--c:${esc(l.color)}"></span>${esc(l.name)} ×${l.placed}${l.qty > 1 ? ` <span style="color:var(--mute)">(#${ranges(l.units)})</span>` : ''}</span>`).join(' ') || '<span style="color:var(--mute)">Empty</span>'}</td></tr>`).join('');
+}
+
+/* ---------- Steps ---------- */
+function setStep(n) {
+  const max = plan ? plan.steps.length : 0; n = Math.max(0, Math.min(max, n));
+  $('#stepR').max = max; $('#stepR').value = n; if (viewer) viewer.setStep(n);
+  $$('#seqT tr.cur').forEach(r => r.classList.remove('cur'));
+  if (!max) { $('#cap').textContent = multi() ? 'Nothing in this truck yet. Assign cases to it, or let Auto overflow into it.' : 'Add cases to see the load.'; return; }
+  if (n === max) { const nr = plan.restraints.length; $('#cap').innerHTML = `<b>All ${plan.boxes.length} cases loaded${multi() ? ' in ' + esc(plan.name) : ''}${nr ? ', with ' + nr + ' load bar or strap position' + (nr > 1 ? 's' : '') : ''}.</b> Use ◀ ▶ to walk the load step by step. Click a case to adjust it by hand.`; return; }
+  const b = plan.steps[n - 1];
+  if (!b) { $('#cap').innerHTML = '<b>Empty truck.</b> Press ▶ to start loading.'; return; }
+  const tr = $(`#seqT tr[data-step="${n}"]`); if (tr) tr.classList.add('cur');
+  if (b.kind === 'restraint') { $('#cap').innerHTML = `<b>Step ${n} of ${max}: install ${esc(b.label.toLowerCase())}.</b> Across the truck at ${fmtLen(b.x)} from nose, ${hText(b)}, tight against the order ${b.grp} cases.${b.fits ? '' : ' <span style="color:var(--warn)">There is no room for it.</span>'}`; return; }
+  $('#cap').innerHTML = `<b>Step ${n} of ${max}: #${b.seq} ${esc(b.name)}${b.of > 1 ? ' (' + b.idx + ' of ' + b.of + ')' : ''}.</b> ${esc(posText(b))}.`;
+}
+function stepBy(d) { stopPlay(); if (sel) { sel = null; renderAdj(); } setStep(+$('#stepR').value + d); }
+$('#prevBtn').addEventListener('click', () => stepBy(-1));
+$('#nextBtn').addEventListener('click', () => stepBy(1));
+$('#allBtn').addEventListener('click', () => { stopPlay(); setStep(plan.steps.length); });
+$('#stepR').addEventListener('input', e => { stopPlay(); if (sel) { sel = null; renderAdj(); } setStep(+e.target.value); });
+function stopPlay() { clearInterval(playT); playT = null; $('#playBtn').textContent = 'Play'; }
+$('#playBtn').addEventListener('click', () => {
+  if (playT) return stopPlay();
+  if (sel) { sel = null; renderAdj(); }
+  if (+$('#stepR').value >= plan.steps.length) setStep(0);
+  $('#playBtn').textContent = 'Pause';
+  playT = setInterval(() => { const n = +$('#stepR').value + 1; if (n > plan.steps.length) return stopPlay(); setStep(n); }, 450);
+});
+$$('.seg button').forEach(b => b.addEventListener('click', () => { $$('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); if (viewer) viewer.setView(b.dataset.v); $('#vpTag').textContent = b.textContent; }));
+$('#fitBtn').addEventListener('click', () => viewer && viewer.setView(viewer.view));
+
+/* ---------- Hand adjust ---------- */
+const NUDGE = () => met() ? [[2.5 / 2.54, '2.5 cm'], [15 / 2.54, '15 cm'], [30 / 2.54, '30 cm']] : [[1, '1"'], [6, '6"'], [12, '12"']];
+let nudgeI = 1;
+function selectCase(k) { stopPlay(); sel = k; setStep(plan.steps.length); renderAdj(); $('#adjMsg').textContent = ''; }
+function renderAdj() {
+  const b = sel && plan && plan.boxes.find(x => keyOf(x) === sel);
+  if (!b) { sel = null; $('#adj').hidden = true; if (viewer) viewer.mark(null); return; }
+  $('#adj').hidden = false;
+  $('#adjT').innerHTML = `<span class="sw" style="--c:${esc(b.color)}"></span>#${b.seq} ${esc(b.name)}${b.of > 1 ? ' (' + b.idx + ' of ' + b.of + ')' : ''}`;
+  $('#adjPos').textContent = posText(b) + ' · ' + fmtDim(b.L, b.W, b.H) + ', long side ' + facing(b).toLowerCase().replace('square', 'square');
+  $('#adjStep').innerHTML = NUDGE().map(([v, t], i) => `<option value="${i}" ${i === nudgeI ? 'selected' : ''}>${t}</option>`).join('');
+  if (viewer) viewer.mark(b.step);
+}
+$('#adjStep').addEventListener('change', e => { nudgeI = +e.target.value; });
+const ovl = (a0, a1, b0, b1) => a0 < b1 - 0.01 && b0 < a1 - 0.01;
+function adjust(op) {
+  const P = plan.boxes, s = P.find(b => keyOf(b) === sel), T = plan.truck, msg = t => { $('#adjMsg').textContent = t; };
+  if (!s) return;
+  if (op === 'done') { sel = null; renderAdj(); return; }
+  const above = b => P.filter(o => o !== b && Math.abs(o.z - (b.z + b.H)) < 0.05 && ovl(o.x, o.x + o.L, b.x, b.x + b.L) && ovl(o.y, o.y + o.W, b.y, b.y + b.W));
+  const stack = [s]; for (let i = 0; i < stack.length; i++) above(stack[i]).forEach(o => { if (!stack.includes(o)) stack.push(o); });
+  const others = P.filter(o => !stack.includes(o));
+  const mv = stack.map(b => ({ b, x: b.x, y: b.y, z: b.z, L: b.L, W: b.W, H: b.H }));
+  const base = mv[0], step = NUDGE()[nudgeI][0];
+  const ovYZ = (m, o) => ovl(m.y, m.y + m.W, o.y, o.y + o.W) && ovl(m.z, m.z + m.H, o.z, o.z + o.H);
+  const ovXZ = (m, o) => ovl(m.x, m.x + m.L, o.x, o.x + o.L) && ovl(m.z, m.z + m.H, o.z, o.z + o.H);
+  let dx = 0, dy = 0;
+  if (op === 'rot') {
+    if (stack.length > 1) return msg('Cases are sitting on this one. Turn the top case, or move the cases on top first.');
+    const cx = base.x + base.L / 2, cy = base.y + base.W / 2; [base.L, base.W] = [base.W, base.L];
+    base.x = Math.min(Math.max(0, cx - base.L / 2), T.L - base.L); base.y = Math.min(Math.max(0, cy - base.W / 2), T.W - base.W);
+  }
+  else if (op === 'nose') dx = -step; else if (op === 'doors') dx = step; else if (op === 'driver') dy = -step; else if (op === 'curb') dy = step;
+  else if (op === 'snose') dx = Math.max(...mv.map(m => others.filter(o => ovYZ(m, o) && o.x + o.L <= m.x + 0.01).reduce((a, o) => Math.max(a, o.x + o.L), 0) - m.x));
+  else if (op === 'sdriver') dy = Math.max(...mv.map(m => others.filter(o => ovXZ(m, o) && o.y + o.W <= m.y + 0.01).reduce((a, o) => Math.max(a, o.y + o.W), 0) - m.y));
+  else if (op === 'scurb') dy = Math.min(...mv.map(m => others.filter(o => ovXZ(m, o) && o.y >= m.y + m.W - 0.01).reduce((a, o) => Math.min(a, o.y), T.W) - (m.y + m.W)));
+  if (op === 'nose' || op === 'snose') dx = Math.max(dx, -Math.min(...mv.map(m => m.x)));
+  if (op === 'driver' || op === 'sdriver') dy = Math.max(dy, -Math.min(...mv.map(m => m.y)));
+  if (op === 'doors') dx = Math.min(dx, Math.min(...mv.map(m => T.L - m.x - m.L)));
+  if (op === 'curb' || op === 'scurb') dy = Math.min(dy, Math.min(...mv.map(m => T.W - m.y - m.W)));
+  if (op !== 'rot' && Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return msg('It can’t go any further that way.');
+  mv.forEach(m => { m.x += dx; m.y += dy; });
+  const floorZ = others.filter(o => ovl(base.x, base.x + base.L, o.x, o.x + o.L) && ovl(base.y, base.y + base.W, o.y, o.y + o.W) && o.z + o.H <= base.z + 0.05).reduce((a, o) => Math.max(a, o.z + o.H), 0);
+  const dz = floorZ - base.z; mv.forEach(m => { m.z += dz; });
+  for (const m of mv) {
+    if (m.x < -0.01 || m.y < -0.01 || m.x + m.L > T.L + 0.01 || m.y + m.W > T.W + 0.01 || m.z + m.H > T.H + 0.01) return msg('That would put it outside the truck.');
+    const hit = others.find(o => ovl(m.x, m.x + m.L, o.x, o.x + o.L) && ovl(m.y, m.y + m.W, o.y, o.y + o.W) && ovl(m.z, m.z + m.H, o.z, o.z + o.H));
+    if (hit) return msg(`Blocked by #${hit.seq} ${hit.name}. Try a smaller step or move that case first.`);
+  }
+  const tr = AT(), pins = {}, moved = new Map(mv.map(m => [m.b, m]));
+  P.forEach(b => { const m = moved.get(b) || b; pins[keyOf(b)] = { x: r2(m.x), y: r2(m.y), z: r2(m.z), L: m.L, W: m.W }; });
+  tr.pins = pins;
+  repack(); commit();
+  const nb = plan.boxes.find(x => keyOf(x) === sel), c = typeOf(s.typeId), notes = [];
+  if (nb) {
+    const sup = nb.on.map(q => plan.boxes.find(x => x.seq === q)).filter(Boolean);
+    if (nb.z > 0.5 && c.sitOn === 'floor') notes.push('this case is set to floor only');
+    if (nb.z > 0.5 && (c.sitOn || 'same') === 'same' && sup.some(o => o.typeId !== nb.typeId || Math.abs(o.x - nb.x) > 0.5 || Math.abs(o.y - nb.y) > 0.5)) notes.push('it is no longer sitting square on its own case type');
+    if (sup.some(o => typeOf(o.typeId) && typeOf(o.typeId).stack === false)) notes.push('it sits on a case marked “nothing on top”');
+    if (op === 'rot' && c.rotate === false) notes.push('this case is marked as not turnable');
+  }
+  msg(notes.length ? 'Moved. Heads up: ' + notes.join('; ') + '.' : (stack.length > 1 ? `Moved, with the ${stack.length - 1} case${stack.length > 2 ? 's' : ''} on top.` : op === 'rot' ? 'Turned 90°.' : 'Moved.'));
+}
+$('#adj').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) adjust(b.dataset.a); });
+$('#autoBtn').addEventListener('click', () => { AT().pins = null; sel = null; repack(); commit(); toast('Back to the automatic layout. Undo restores your adjustments.'); });
+
+/* ---------- Exports ---------- */
+function b64ToBytes(u) { const s = atob(u.split(',')[1]), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+const fileBase = () => ((S.job || 'truck-pack').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'truck-pack');
+const scoped = () => (!multi() || $('#xScope').value === 'all') ? plans : [plan];
+const scopeTag = list => list.length === 1 && multi() ? '-' + list[0].name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') : '';
+async function save(filename, data) {
+  if (!dl) { toast('Downloads work when this page is opened in Claude.'); return; }
+  try { await dl.save({ filename, data }); } catch (e) { if (e && e.code !== 'declined') toast(e.code === 'host_unavailable' ? 'This app cannot save files. Open the page in a browser.' : 'Could not save the file (' + (e.code || 'error') + ').'); }
+}
+function csv(list) {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', u = uL();
+  const h = ['Truck', 'Vehicle', 'Step', 'Case #', 'Case', 'Unit', 'Of', `Length (${u})`, `Width (${u})`, `Height (${u})`, `Weight (${uW()})`, `From nose (${u})`, `From driver wall (${u})`, `Off floor (${u})`, 'Side', 'Rests on'];
+  const rows = [];
+  list.forEach(p => p.steps.forEach(b => rows.push((b.kind === 'restraint' ? [p.name, p.truck.name, b.step, '', 'Install ' + b.label.toLowerCase(), '', '', '', lenOut(p.truck.W), '', '', lenOut(b.x), '', b.parts.map(x => lenOut(x.h)).join(' / '), 'Full width', 'Behind order ' + b.grp]
+    : [p.name, p.truck.name, b.step, b.seq, b.name, b.idx, b.of, lenOut(b.L), lenOut(b.W), lenOut(b.H), wtOut(b.wt), lenOut(b.x), lenOut(b.y), lenOut(b.z), b.side, b.on.map(s => '#' + s).join(' ')]).map(q).join(','))));
+  unplacedAll.forEach(x => rows.push(['NOT LOADED', '', '', '', (typeOf(x.type) || {}).name, x.idx, '', '', '', '', '', '', '', '', x.reason, ''].map(q).join(',')));
+  return [h.map(q).join(',')].concat(rows).join('\r\n');
+}
+function listText(list) {
+  return (S.job || 'Truck pack') + '\n' + list.map(p => `\n== ${p.name} · ${p.truck.name} · ${p.boxes.length} cases ==\n` + p.steps.map(b => b.kind === 'restraint' ? `---- Install ${b.label.toLowerCase()} at ${fmtLen(b.x)} from nose, ${hText(b)} ----` : `#${b.seq}  ${b.name}${b.of > 1 ? ' (' + b.idx + '/' + b.of + ')' : ''}  ${posText(b)}`).join('\n')).join('\n')
+    + (unplacedAll.length ? '\n\nNot loaded: ' + unplacedAll.map(u => (typeOf(u.type) || {}).name + ' ' + u.idx).join(', ') : '');
+}
+function hexRgb(h) { const c = parseInt(h.slice(1), 16); return [c >> 16, c >> 8 & 255, c & 255]; }
+async function pdf(list) {
+  if (!window.jspdf) { toast('PDF library did not load.'); return; }
+  toast('Building PDF…'); await new Promise(r => setTimeout(r, 30));
+  const { jsPDF } = window.jspdf, d = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  const PW = 792, PH = 612, M = 36; let first = true;
+  const page = () => { if (!first) d.addPage(); first = false; };
+  const head = (title, sub) => {
+    d.addImage(LOGO, 'PNG', M, 26, 90, 28, 'logo', 'FAST');
+    d.setDrawColor(0, 94, 184); d.setLineWidth(2); d.line(M + 104, 26, M + 104, 54);
+    d.setFont('helvetica', 'bold'); d.setFontSize(18); d.setTextColor(0); d.text(title, M + 116, 41);
+    d.setFont('helvetica', 'normal'); d.setFontSize(9.5); d.setTextColor(80); d.text(sub, M + 116, 54);
+    d.setDrawColor(0, 94, 184); d.setLineWidth(3); d.line(M, 66, PW - M, 66); d.setTextColor(0);
+  };
+  const foot = () => { d.setFontSize(8); d.setTextColor(120); d.text('4Wall Entertainment · Truck Pack Planner · ' + (S.job || 'Untitled job') + ' · Page ' + d.getNumberOfPages(), M, PH - 18); d.setTextColor(0); };
+  const subOf = p => `${S.job || 'Untitled job'}  ·  ${p.truck.name}  ·  ${fmtLen(p.truck.L)} x ${fmtLen(p.truck.W)} x ${fmtLen(p.truck.H)}  ·  ${new Date().toLocaleDateString()}`;
+  if (list.length > 1) {
+    page(); head('JOB SUMMARY · ' + list.length + ' TRUCKS', `${S.job || 'Untitled job'}  ·  ${new Date().toLocaleDateString()}`);
+    let y = 90; const cols = [['Truck', 110], ['Vehicle', 120], ['Cases', 50, 'r'], ['', 16], ['Weight', 140], ['Floor used', 120], ['Load bars / straps', 170]];
+    const row = (v, bold) => { let x = M; d.setFont('helvetica', bold ? 'bold' : 'normal'); d.setFontSize(9.5); cols.forEach(([t, w, a], i) => { d.text(String(v[i]), a ? x + w - 6 : x, y, { align: a ? 'right' : 'left', maxWidth: w - 8 }); x += w; }); y += 16; };
+    row(cols.map(c => c[0]), true); d.setLineWidth(1); d.line(M, y - 11, PW - M, y - 11);
+    list.forEach(p => row([p.name, p.truck.name, p.boxes.length, '', fmtWt(p.stats.weight) + (p.truck.payload ? ' of ' + fmtWt(p.truck.payload) : ''), fmtLen(p.stats.usedL) + ' of ' + fmtLen(p.truck.L), p.restraints.map(r => r.label).join(', ') || 'None']));
+    y += 14; d.setFont('helvetica', 'bold'); d.setFontSize(11); d.text('GEAR BY TRUCK', M, y); y += 8;
+    const cw = (PW - M * 2) / Math.min(list.length, 3);
+    list.forEach((p, i) => {
+      if (i && i % 3 === 0) { foot(); page(); head('GEAR BY TRUCK (CONT.)', S.job || ''); y = 84; }
+      const x = M + (i % 3) * cw; let yy = y + 14; d.setFont('helvetica', 'bold'); d.setFontSize(10); d.text(p.name + ' · ' + p.truck.name, x, yy); d.setFont('helvetica', 'normal'); d.setFontSize(8.5); yy += 13;
+      p.legend.forEach(l => { if (yy > PH - 40) return; d.setFillColor(...hexRgb(l.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x, yy - 7, 8, 8, 'FD'); d.text(`${l.name}  x${l.placed}${l.qty > 1 ? '  (#' + ranges(l.units) + ' of ' + l.qty + ')' : ''}`, x + 12, yy, { maxWidth: cw - 16 }); yy += 12; });
+    });
+    if (unplacedAll.length) { d.setTextColor(180, 35, 24); d.setFontSize(9); d.text('Not loaded in any truck: ' + unplacedWarnings().join('  '), M, PH - 34, { maxWidth: PW - M * 2 }); d.setTextColor(0); }
+    foot();
+  }
+  for (const p of list) {
+    if (viewer) viewer.setPlan(p);
+    const T = p.truck, s = p.stats, n = p.steps.length, tname = multi() ? p.name.toUpperCase() + ' · ' : '';
+    const img = (v, w, h, st) => viewer.snapshot(w, h, v, st, 'jpeg');
+    page(); head(tname + 'TRUCK PACK', subOf(p));
+    d.addImage(img('iso', 1200, 760), 'JPEG', M, 78, 456, 289);
+    let tw = PW - M * 2 - 470, topH = tw * (T.W + 60) / (T.L + 40), sideH = tw * (T.H + 40) / (T.L + 40);
+    const fitK = Math.min(1, 262 / (topH + sideH)); tw = Math.round(tw * fitK); topH = Math.round(topH * fitK); sideH = Math.round(sideH * fitK);
+    d.setFontSize(9); d.setFont('helvetica', 'bold');
+    d.text('TOP (nose left, doors right, curb side up)', M + 470, 86); d.addImage(img('top', 900, Math.round(900 * topH / tw)), 'JPEG', M + 470, 90, tw, topH);
+    d.text('DRIVER SIDE', M + 470, 104 + topH); d.addImage(img('side', 900, Math.round(900 * sideH / tw)), 'JPEG', M + 470, 108 + topH, tw, sideH);
+    let y = 122 + topH + sideH; const rearH = Math.min(367 - y, 120);
+    if (rearH > 50) { d.text('FROM THE DOORS', M + 470, y); d.addImage(img('rear', 600, Math.round(600 / 1.4)), 'JPEG', M + 470, y + 4, rearH * 1.4, rearH); }
+    d.setFont('helvetica', 'normal');
+    y = 390; const st = [['Cases', String(s.count)], ['Floor used', fmtLen(s.usedL) + ' of ' + fmtLen(T.L)], ['Cube used', pct(s.volume, s.truckVol) + '%'], ['Weight', fmtWt(s.weight) + (T.payload ? ' of ' + fmtWt(T.payload) : '')], ['Center of weight', s.cgX != null ? fmtLen(s.cgX) + ' from nose' : 'n/a']];
+    const sx = [0, 70, 200, 290, 470]; st.forEach(([k, v], i) => { const x = M + sx[i]; d.setFontSize(8.5); d.setTextColor(90); d.text(k, x, y); d.setFontSize(13); d.setTextColor(0); d.setFont('helvetica', 'bold'); d.text(v, x, y + 16); d.setFont('helvetica', 'normal'); });
+    y = 428; d.setFontSize(10); d.setFont('helvetica', 'bold'); d.text('CASE LEGEND', M, y); d.setFont('helvetica', 'normal'); y += 8;
+    const colW = (PW - M * 2) / 3;
+    p.legend.forEach((l, i) => {
+      const x = M + (i % 3) * colW, yy = y + Math.floor(i / 3) * 17 + 6; if (yy > PH - 44) return;
+      d.setFillColor(...hexRgb(l.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x, yy, 11, 11, 'FD');
+      d.setFontSize(9); d.text(`${l.name}  x${l.placed}${multi() && l.qty > 1 ? ' (#' + ranges(l.units) + ')' : l.placed < l.qty ? ' (' + (l.qty - l.placed) + ' not loaded)' : ''}  ·  ${l.dims}`, x + 16, yy + 9, { maxWidth: colW - 20 });
+    });
+    let by = y + Math.ceil(p.legend.length / 3) * 17 + 18;
+    if (p.restraints.length && by < PH - 50) { d.setFontSize(9); d.setFont('helvetica', 'bold'); d.text('LOAD BARS AND STRAPS:', M, by); d.setFont('helvetica', 'normal'); d.text(p.restraints.map(r => `${r.label} after order ${r.grp} (${fmtLen(r.x)} from nose)`).join('   ·   '), M + 122, by, { maxWidth: PW - M * 2 - 122 }); by += 14; }
+    const warns = planWarnings(p).concat(list.length === 1 ? unplacedWarnings() : []);
+    if (warns.length) { d.setTextColor(180, 35, 24); d.setFontSize(9); warns.slice(0, 3).forEach(w => { if (by < PH - 26) { d.text('! ' + w, M, by, { maxWidth: PW - M * 2 }); by += 12; } }); d.setTextColor(0); }
+    foot();
+    if (n > 1) {
+      page(); head(tname + 'LOAD PROGRESSION', subOf(p)); const cols = 3, gw = (PW - M * 2 - 20) / cols, gh = gw * 0.62;
+      const marks = [...new Set([1, 2, 3, 4, 5, 6].map(k => Math.max(1, Math.round(n * k / 6))))];
+      marks.forEach((stp, i) => {
+        const x = M + (i % cols) * (gw + 10), yy = 84 + Math.floor(i / cols) * (gh + 40);
+        d.addImage(img('iso', 720, Math.round(720 * 0.62), stp), 'JPEG', x, yy, gw, gh);
+        const prev = i ? marks[i - 1] + 1 : 1; d.setFontSize(10); d.setFont('helvetica', 'bold');
+        d.text(`Steps ${prev}–${stp}`, x, yy + gh + 14); d.setFont('helvetica', 'normal'); d.setFontSize(8.5); d.setTextColor(90);
+        const it = p.steps[stp - 1]; d.text(it.kind === 'restraint' ? `Ends with ${it.label.toLowerCase()} at ${fmtLen(it.x)} from nose` : `Through case #${it.seq}: ${it.name}, ${fmtLen(it.x)} from nose`, x, yy + gh + 26, { maxWidth: gw }); d.setTextColor(0);
+      });
+      foot();
+    }
+    const cols = [['Case', 30, 'r'], ['', 170], ['Size along x across x high', 150], ['Weight', 64, 'r'], ['From nose', 64, 'r'], ['Side', 76], ['Level', 104], ['Check', 40]];
+    let ty = 0; const rowH = 17;
+    const thead = () => { page(); head(tname + 'LOAD SEQUENCE', subOf(p)); ty = 86; let x = M; d.setFontSize(8.5); d.setFont('helvetica', 'bold'); cols.forEach(([t, w, a]) => { d.text(t, a ? x + w - 4 : x + 4, ty, { align: a ? 'right' : 'left' }); x += w; }); d.setFont('helvetica', 'normal'); d.setLineWidth(1); d.setDrawColor(0); d.line(M, ty + 5, PW - M, ty + 5); ty += 18; };
+    thead();
+    p.steps.forEach(b => {
+      if (ty > PH - 40) { foot(); thead(); }
+      if (b.kind === 'restraint') {
+        d.setFillColor(255, 244, 200); d.rect(M, ty - 11, PW - M * 2, rowH - 1, 'F');
+        let rx = M + 34; b.parts.forEach(q => { if (q.type === 'strap') d.setFillColor(255, 196, 0); else d.setFillColor(150, 158, 168); d.rect(rx, ty - 6, 14, 4, 'F'); rx += 17; });
+        d.setFont('helvetica', 'bold'); d.setFontSize(9); d.text('INSTALL ' + b.label.toUpperCase(), rx + 3, ty); d.setFont('helvetica', 'normal');
+        d.text('across the truck, ' + hText(b), M + 204, ty, { maxWidth: 210 });
+        d.text(fmtLen(b.x), M + 474, ty, { align: 'right' }); d.text('Full width', M + 482, ty); d.text('Behind order ' + b.grp, M + 558, ty);
+        d.setDrawColor(120); d.rect(M + 672, ty - 9, 10, 10); d.setDrawColor(215); d.setLineWidth(0.5); d.line(M, ty + 5, PW - M, ty + 5); ty += rowH; return;
+      }
+      const v = [String(b.seq), `${b.name}${b.of > 1 ? '  ' + b.idx + '/' + b.of : ''}`, fmtDim(b.L, b.W, b.H) + '  ' + (Math.abs(b.L - b.W) < 0.5 ? '' : b.W > b.L ? 'across' : 'along'), fmtWt(b.wt), fmtLen(b.x), b.side, b.z < 0.5 ? 'Floor' : 'On #' + b.on.join(', #'), ''];
+      let x = M; d.setFontSize(9);
+      cols.forEach(([t, w, a], i) => {
+        if (i === 1) { d.setFillColor(...hexRgb(b.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x + 4, ty - 8, 9, 9, 'FD'); d.text(v[i], x + 18, ty, { maxWidth: w - 20 }); }
+        else if (i === 7) { d.setDrawColor(120); d.rect(x + 14, ty - 9, 10, 10); }
+        else d.text(v[i], a ? x + w - 4 : x + 4, ty, { align: a ? 'right' : 'left', maxWidth: w - 6 });
+        x += w;
+      });
+      d.setDrawColor(215); d.setLineWidth(0.5); d.line(M, ty + 5, PW - M, ty + 5); ty += rowH;
+    });
+    d.setFontSize(8); d.setTextColor(90); if (ty < PH - 30) d.text('Along/across = direction of the long side. Load top to bottom; cases rest only on cases with lower numbers. Yellow rows: install the load bar or strap before continuing.', M, Math.min(PH - 30, ty + 6)); d.setTextColor(0);
+    foot();
+  }
+  if (viewer) { viewer.setPlan(plan); setStep(plan.steps.length); renderAdj(); }
+  await save(fileBase() + scopeTag(list) + '-load-sheet.pdf', d.output('arraybuffer'));
+}
+const exportPlan = p => ({ id: p.id, name: p.name, job: p.job, units: p.units, truck: p.truck, boxes: p.boxes, restraints: p.restraints, steps: p.steps, legend: p.legend, created: p.created });
+function crewHTML(list) {
+  const data = JSON.stringify({ plans: list.map(exportPlan), job: S.job, units: S.units, logo: LOGO, notLoaded: unplacedAll.map(u => ({ name: (typeOf(u.type) || {}).name, idx: u.idx, reason: u.reason })) }).replace(/</g, '\\u003c');
+  return '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc((S.job || 'Truck pack') + ' · 4Wall load plan') + '</title>'
+    + '<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">'
+    + '<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"><\/script>'
+    + '<style>' + CREW_CSS + '</style></head><body>' + CREW_BODY + '<script>const DATA=' + data + ';\n' + TPViewer.toString() + '\n' + CREW_JS + '<\/script></body></html>';
+}
+const CREW_CSS = `*{box-sizing:border-box}body{margin:0;font:15px/1.45 Roboto,Arial,sans-serif;background:#fff;color:#0b0b0c}h1,h2{font-family:"Bebas Neue",Arial,sans-serif;font-weight:400;margin:0;line-height:1.05}header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 16px;border-bottom:4px solid #005eb8}header img{height:34px}header h1{font-size:28px;border-left:3px solid #005eb8;padding-left:12px}header p{margin:0;color:#5b6068;font-size:14px;width:100%}.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 16px 0}.tabs button{display:grid;text-align:left;line-height:1.2;padding:8px 14px}.tabs small{color:inherit;opacity:.8;font-size:12px}.vb{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}button{font:inherit;min-height:42px;padding:0 14px;border:1px solid #cfd3d9;background:#fff;border-radius:4px;cursor:pointer}button[aria-pressed=true],button.p{background:#005eb8;color:#fff;border-color:#005eb8}#vp{height:58vh;min-height:320px;background:#0d0f12;touch-action:none}.sb{display:grid;grid-template-columns:auto auto 1fr auto;gap:6px;align-items:center;padding:10px 16px}input[type=range]{width:100%;height:42px;accent-color:#005eb8}#cap{margin:0 16px;padding:10px 12px;border-left:4px solid #005eb8;background:#f4f5f6;min-height:48px}section{padding:16px}.lg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px}.lg span{display:inline-flex;gap:6px;align-items:center;border:1px solid #d9dce1;border-radius:16px;padding:4px 10px 4px 5px;font-size:14px}.lg i,.sw{display:inline-block;width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.3)}.sw{border-radius:3px;width:13px;height:13px;margin-right:6px;vertical-align:-2px}table{border-collapse:collapse;width:100%;font-size:14px}th{text-align:left;border-bottom:2px solid #000;padding:5px 6px;color:#5b6068;font-weight:500}td{border-bottom:1px solid #e1e3e7;padding:6px}tr.cur td{background:#e6f0fa}tr.rs td{background:#fff4c8}tr.rs.cur td{background:#ffe27a}tr{cursor:pointer}.n{text-align:right;white-space:nowrap}.warn{color:#b42318}@media(max-width:600px){td:nth-child(3),th:nth-child(3){display:none}}`;
+const CREW_BODY = `<header><img id="lg" alt="4Wall Entertainment"><h1 id="tt">Load plan</h1><p id="meta"></p></header><div class="tabs" id="tabs"></div><div class="vb"><button data-v="iso" aria-pressed="true">3D</button><button data-v="top">Top</button><button data-v="side">Side</button><button data-v="rear">From doors</button></div><div id="vp"></div><div class="sb"><button id="pv" aria-label="Previous">◀</button><button id="nx" class="p" aria-label="Next">▶</button><input type="range" id="rg" min="0" value="0" aria-label="Step"><button id="al">All</button></div><p id="cap"></p><section><h2>Cases in this truck</h2><div class="lg" id="leg"></div><h2>Load sequence</h2><table><thead><tr><th class="n">Step</th><th>Case</th><th>Size</th><th>Position</th></tr></thead><tbody id="tb"></tbody></table><p id="nl" class="warn"></p></section>`;
+const CREW_JS = `(function(){var PL=DATA.plans,P,B,m=DATA.units==='metric',v=null,cur=0;function e(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fl(i){if(m){var c=i*2.54;return c>=100?(c/100).toFixed(2)+' m':Math.round(c)+' cm'}var t=Math.round(i),f=Math.floor(t/12),n=t%12;return f?f+"' "+n+'"':n+'"'}
+function dim(b){return[b.L,b.W,b.H].map(function(v){return Math.round(m?v*2.54:v)}).join(' × ')+(m?' cm':' in')}
+function ht(r){return 'at '+r.parts.map(function(p){return fl(p.h)}).join(' and ')+' off the floor'}
+function pos(b){return b.kind==='restraint'?'Across the truck at '+fl(b.x)+' from nose, '+ht(b):fl(b.x)+' from nose, '+b.side.toLowerCase()+', '+(b.z<.5?'on the floor':'on top of #'+b.on.join(', #'))}
+var rg=document.getElementById('rg'),cap=document.getElementById('cap');
+document.getElementById('lg').src=DATA.logo;document.getElementById('tt').textContent=(DATA.job||'Truck pack');document.title=(DATA.job||'Truck pack')+' · 4Wall load plan';
+document.getElementById('tabs').innerHTML=PL.length>1?PL.map(function(p,i){return '<button data-i="'+i+'"><b>'+e(p.name)+'</b><small>'+e(p.truck.name)+' · '+p.boxes.length+' cases</small></button>'}).join(''):'';
+if(DATA.notLoaded.length)document.getElementById('nl').textContent='Not loaded in any truck: '+DATA.notLoaded.map(function(u){return u.name+' '+u.idx}).join(', ');
+function set(n){n=Math.max(0,Math.min(B.length,n));rg.max=B.length;rg.value=n;if(v)v.setStep(n);[].forEach.call(document.querySelectorAll('tr.cur'),function(r){r.classList.remove('cur')});
+if(!B.length){cap.innerHTML='<b>Nothing in this truck.</b>';return}
+if(n===B.length){cap.innerHTML='<b>All '+P.boxes.length+' cases in '+e(P.name)+'.</b> Tap ▶ from the start to walk the load in order.';return}if(!n){cap.innerHTML='<b>Empty truck.</b> Tap ▶ for step 1.';return}
+var b=B[n-1],r=document.querySelector('tr[data-s="'+n+'"]');if(r)r.classList.add('cur');
+cap.innerHTML=b.kind==='restraint'?'<b>Step '+n+' of '+B.length+': install '+e(b.label.toLowerCase())+'.</b> '+e(pos(b))+'.':'<b>Step '+n+' of '+B.length+': case #'+b.seq+' '+e(b.name)+(b.of>1?' ('+b.idx+' of '+b.of+')':'')+'.</b> '+e(pos(b))+'.'}
+function show(i){cur=i;P=PL[i];B=P.steps;
+[].forEach.call(document.querySelectorAll('#tabs button'),function(x){x.setAttribute('aria-pressed',+x.dataset.i===i)});
+document.getElementById('meta').textContent=P.name+' · '+P.truck.name+' · '+fl(P.truck.L)+' × '+fl(P.truck.W)+' × '+fl(P.truck.H)+' · '+P.boxes.length+' cases · '+P.restraints.length+' load bar/strap positions · planned '+P.created;
+document.getElementById('leg').innerHTML=P.legend.map(function(l){return '<span><i style="background:'+e(l.color)+'"></i>'+e(l.name)+' ×'+l.placed+'</span>'}).join('');
+document.getElementById('tb').innerHTML=B.map(function(b){return b.kind==='restraint'?'<tr class="rs" data-s="'+b.step+'"><td class="n">'+b.step+'</td><td><b>Install '+e(b.label.toLowerCase())+'</b></td><td></td><td>'+e(pos(b))+'</td></tr>':'<tr data-s="'+b.step+'"><td class="n">'+b.step+'</td><td><span class="sw" style="background:'+e(b.color)+'"></span>#'+b.seq+' '+e(b.name)+(b.of>1?' '+b.idx+'/'+b.of:'')+'</td><td>'+dim(b)+'</td><td>'+e(pos(b))+'</td></tr>'}).join('');
+if(v)v.setPlan(P);set(B.length)}
+try{v=TPViewer(document.getElementById('vp'),{onPick:function(b){if(b)set(b.step)}})}catch(x){document.getElementById('vp').innerHTML='<p style="color:#fff;padding:20px">The 3D view needs an internet connection the first time it opens. The load sequence below still works.</p>'}
+show(0);
+document.getElementById('tabs').onclick=function(ev){var t=ev.target.closest('[data-i]');if(t)show(+t.dataset.i)};
+document.getElementById('pv').onclick=function(){set(+rg.value-1)};document.getElementById('nx').onclick=function(){set(+rg.value>=B.length?1:+rg.value+1)};document.getElementById('al').onclick=function(){set(B.length)};rg.oninput=function(){set(+rg.value)};
+document.getElementById('tb').onclick=function(ev){var r=ev.target.closest('tr');if(r){set(+r.dataset.s);window.scrollTo({top:0,behavior:'smooth'})}};
+[].forEach.call(document.querySelectorAll('[data-v]'),function(b){b.onclick=function(){[].forEach.call(document.querySelectorAll('[data-v]'),function(x){x.setAttribute('aria-pressed',x===b)});if(v)v.setView(b.dataset.v)}});})();`;
+$$('[data-x]').forEach(b => b.addEventListener('click', async () => {
+  const list = scoped(), x = b.dataset.x;
+  if (!list.some(p => p.boxes.length)) { toast('Nothing loaded yet.'); return; }
+  if (x === 'copy') { try { await navigator.clipboard.writeText(listText(list)); toast('Load list copied'); } catch (e) { toast('Copy was blocked by the browser.'); } return; }
+  if (x === 'csv') return save(fileBase() + scopeTag(list) + '-load-list.csv', csv(list));
+  if (x === 'png') return save(fileBase() + (multi() ? '-' + plan.name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') : '') + '-' + viewer.view + '.png', b64ToBytes(viewer.snapshot(1800, 1100)));
+  if (x === 'html') return save(fileBase() + scopeTag(list) + '-3d-load-plan.html', crewHTML(list));
+  if (x === 'pdf') { b.disabled = true; try { await pdf(list); } finally { b.disabled = false; } }
+}));
+
+/* ---------- Saved plans (shared) ---------- */
+function planDoc() { return { name: S.job || 'Untitled job', truck: S.trucks.map(t => t.truck.name).join(' + '), cases: S.cases.reduce((a, c) => a + (+c.qty || 0), 0), updatedAt: Date.now(), state: JSON.parse(snapshot()) }; }
+$('#saveBtn').addEventListener('click', async () => {
+  if (!db) return; if (!S.job) { $('#jobName').focus(); toast('Give the job a name first.'); return; }
+  const b = $('#saveBtn'); b.disabled = true;
+  try { if (!S.planId) S.planId = uid() + uid(); await db.doc('plans/' + S.planId).set(planDoc()); toast('Plan saved'); commit(); }
+  catch (e) { toast(e && e.code === 'invalid_argument' ? 'You have view-only access, so plans cannot be saved.' : 'Save failed (' + ((e && e.code) || 'error') + ').'); }
+  finally { b.disabled = false; }
+});
+let planList = [];
+function renderPlans() {
+  $('#plans').innerHTML = planList.length ? planList.map(p => `<li><div><b>${esc(p.name)}</b><small>${esc(p.truck)} · ${+p.cases || 0} cases · ${new Date(+p.updatedAt || 0).toLocaleString()}</small></div><button class="btn sm pri" data-open="${esc(p.id)}">Open</button><button class="btn sm" data-rm="${esc(p.id)}">Delete</button></li>`).join('') : '<li>No saved plans yet. Name the job and press Save plan.</li>';
+}
+$('#plans').addEventListener('click', async e => {
+  const o = e.target.closest('[data-open]'), r = e.target.closest('[data-rm]');
+  if (o) { const p = planList.find(p => p.id === o.dataset.open); if (!p || !p.state) return; S = normalize(Object.assign(fresh(false), { trucks: null }, JSON.parse(JSON.stringify(p.state)), { planId: p.id, isSample: false })); sel = null; renderAll(); commit(); closeM(); toast('Opened ' + p.name); }
+  if (r) { if (r.dataset.sure !== '1') { r.dataset.sure = '1'; r.textContent = 'Delete?'; return; } try { await db.doc('plans/' + r.dataset.rm).delete(); if (S.planId === r.dataset.rm) S.planId = null; } catch (e) { toast('Delete failed.'); } }
+});
+$('#openBtn').addEventListener('click', () => { renderPlans(); openM('#openM'); });
+$('#newBtn').addEventListener('click', () => { S = fresh(false); sel = null; renderAll(); commit(); toast('New plan. Undo restores the previous one.'); });
+$('#undoBtn').addEventListener('click', undo);
+
+function renderAll() { renderTruck(); renderCases(); repack(); renderRestraints(true); }
+function startViewer() {
+  if (!window.THREE) { $('#vp').insertAdjacentHTML('beforeend', '<div class="err">The 3D view could not load. Everything else still works.</div>'); return; }
+  try { viewer = TPViewer($('#vp'), { onPick: b => { if (!b) return; if (b.kind === 'case') selectCase(keyOf(b)); else { sel = null; renderAdj(); setStep(b.step); } } }); } catch (e) { $('#vp').insertAdjacentHTML('beforeend', '<div class="err">This device could not start the 3D view (WebGL is off).</div>'); }
+}
+startViewer(); $('#vpTag').textContent = '3D'; renderAll(); commit();
+if (window.claude && window.claude.use) {
+  window.claude.use('downloads').then(d => { dl = d; $('#dlNote').textContent = d ? '' : 'File downloads are not available in this view. Copy load list still works.'; }).catch(() => { });
+  window.claude.use('db').then(d => {
+    db = d; if (!d) return; $('#saveBtn').disabled = false; $('#openBtn').disabled = false;
+    plansUnsub = d.collection('plans').orderBy('updatedAt', 'desc').limit(200).onSnapshot(s => { planList = s.docs.map(x => Object.assign({ id: x.id }, x.data())); if ($('#openM').classList.contains('on')) renderPlans(); }, () => { });
+  }).catch(() => { });
+} else $('#dlNote').textContent = 'File downloads and saved plans work when this page is opened in Claude.';
+}
+
+</script>
+</body>
+</html>

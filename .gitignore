@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.png
+!assets/*.png
+out_*
+m_out_*
+*.pdf
+.DS_Store

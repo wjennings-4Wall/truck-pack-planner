@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4Wall Truck Pack Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="@THREE@"></script>
+<script src="@ORBIT@"></script>
+<script src="@JSPDF@"></script>
+<style>
+/* VOICE: a working shop tool, plain and exact, like a prep sheet taped inside a truck door.
+   IDEA: the 4Wall load plan: a lit truck box you can walk through case by case.
+   PICTURE: the 3D truck itself, dark like a trailer interior, cases in their label colors.
+   COLOUR and TYPE: 4Wall Blue #005eb8, black, white (brand guide); Bebas Neue heads, Roboto text.
+   LAYOUT: case entry on the left, truck on the right, load sequence below; stacks on phones. */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0b0c0e);--ink:light-dark(#0b0b0c,#f1f2f4);--mute:light-dark(#5b6068,#a3a9b2);--line:light-dark(#d9dce1,#2a2e35);--panel:light-dark(#f4f5f6,#15171b);--field:light-dark(#ffffff,#0f1114);--blue:#005eb8;--blue-ink:light-dark(#005eb8,#5aa7ff);--warn:light-dark(#b42318,#ff8a80);--ok:light-dark(#0b6b3a,#6fd39b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Roboto,Arial,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Bebas Neue",Arial,sans-serif;font-weight:400;letter-spacing:.01em;margin:0;line-height:1.05}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--blue-ink);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;padding:14px max(3vw,16px);border-bottom:4px solid var(--blue);background:light-dark(#fff,#000)}
+.brand{display:flex;align-items:center;gap:16px}
+.logo{height:40px;width:auto;display:block;padding:4px 6px;background:#fff;border-radius:2px}
+.brand h1{font-size:34px;border-left:3px solid var(--blue);padding-left:16px}
+.brand h1 span{color:var(--blue-ink)}
+.job{flex:1 1 260px;display:flex;gap:8px;align-items:center}
+.job input{flex:1;font-size:17px;font-weight:500;padding:9px 12px;border:1px solid var(--line);border-radius:4px;background:var(--field);min-height:44px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{min-height:44px;padding:0 16px;border-radius:4px;border:1px solid var(--line);background:var(--field);font-weight:500;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--blue-ink)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:#004c96}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+.main{display:grid;grid-template-columns:minmax(330px,440px) minmax(0,1fr);gap:0;align-items:stretch}
+.main>aside{grid-column:1;grid-row:1}.main>.stage{grid-column:2;grid-row:1}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:18px 18px 28px;min-height:100%}
+.sec{margin-bottom:22px}
+.sec h2{font-size:26px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sec h2 small{font:500 13px Roboto,Arial,sans-serif;color:var(--mute)}
+label.f{display:grid;gap:3px;font-size:13px;color:var(--mute)}
+.f input,.f select,.case input:not([type=checkbox]):not([type=color]){width:100%;min-height:40px;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:16px;color:var(--ink)}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hint{font-size:13px;color:var(--mute);margin:6px 0 0}
+.cases{display:grid;gap:10px}
+.case{background:var(--field);border:1px solid var(--line);border-left:8px solid var(--c);border-radius:4px;padding:10px}
+.case.bad{border-color:var(--warn);border-left-color:var(--c)}
+.r1{display:grid;grid-template-columns:44px minmax(0,1fr) 74px 40px;gap:8px;align-items:center}
+.r1 input[type=color]{width:44px;height:40px;padding:2px;border:1px solid var(--line);border-radius:4px;background:var(--field)}
+.r1 .nm{font-weight:700}
+.del{width:40px;height:40px;border:1px solid transparent;border-radius:4px;background:none;font-size:22px;line-height:1;color:var(--mute)}
+.del:hover{color:var(--warn);border-color:var(--line)}
+.r2{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:8px}
+.r2 label,.r1 label{font-size:12px;color:var(--mute);display:grid;gap:2px}
+.r3{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-size:13px}
+.r3 label{display:flex;gap:7px;align-items:center;min-height:32px}
+.r3 input{width:18px;height:18px;accent-color:var(--blue)}
+.note{font-size:12px;color:var(--warn);width:100%}
+.where{font-size:12px;color:var(--mute);width:100%}.where:empty,.note:empty{display:none}
+.mini{width:72px!important;min-height:34px!important;padding:2px 6px!important;font-size:14px!important}
+.ttabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.ttab{display:grid;text-align:left;gap:1px;min-height:48px;padding:6px 14px;border:1px solid var(--line);border-radius:4px;background:var(--field);line-height:1.25}
+.ttab b{font-weight:700}.ttab small{font-size:12px;color:var(--mute)}
+.ttab[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}.ttab[aria-pressed=true] small{color:#dbe8f7}
+.ttab.add{border-style:dashed;color:var(--blue-ink);font-weight:500;place-items:center}
+.manual{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:8px 12px;border:1px solid var(--blue-ink);border-radius:4px;font-size:14px}
+.manual[hidden],.adj[hidden],#byTruck[hidden]{display:none}
+.adj{margin-top:10px;padding:12px 14px;border:2px solid var(--blue-ink);border-radius:4px;background:var(--panel)}
+.adj .hd{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
+.adj .hd b{font-size:16px}.adj .pos{font-size:13px;color:var(--mute)}
+.adjb{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.adjb select{min-height:36px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);font-size:14px}
+.adjb .grp{display:flex;gap:6px;flex-wrap:wrap;padding-right:10px;border-right:1px solid var(--line)}.adjb .grp:last-child{border-right:0}
+#adjMsg{margin:8px 0 0;font-size:14px;min-height:1.4em}
+.mini-chip{display:inline-block;white-space:nowrap;margin:2px 10px 2px 0;font-size:13px}
+#xScope{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);font-size:15px}
+.r3 select{min-height:34px;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:14px;color:var(--ink)}
+.rsl{display:grid;gap:8px}
+.rsl select{width:100%;min-height:40px;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--field);font-size:16px;color:var(--ink)}
+tr.rs td{background:light-dark(#fff8db,#2a2410);font-weight:500}
+tr.rs.cur td{background:light-dark(#ffe98a,#4a3d10)}
+.bar{display:inline-block;width:18px;height:6px;border-radius:3px;background:#9aa3ad;margin-right:7px;vertical-align:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}.bar.s{background:#ffc400}
+.addrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+details.rules summary{cursor:pointer;font:400 26px "Bebas Neue",Arial,sans-serif;list-style:none;min-height:36px}
+details.rules summary::after{content:" +";color:var(--blue-ink)}details.rules[open] summary::after{content:" –"}
+.rules .row{display:flex;gap:9px;align-items:center;min-height:38px;font-size:14px}
+.rules .row input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue)}
+.stage{padding:18px max(2.4vw,16px) 8px}
+.vbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{min-height:40px;padding:0 14px;border:0;background:var(--field);font-weight:500;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--blue);color:#fff}
+.vp{position:relative;height:clamp(360px,60vh,720px);border-radius:4px;overflow:hidden;background:#0d0f12;touch-action:none}
+.vp .tag{position:absolute;left:12px;top:10px;color:#cfd6df;font:400 22px "Bebas Neue",Arial,sans-serif;pointer-events:none;text-shadow:0 1px 2px #000}
+.vp .err{position:absolute;inset:0;display:grid;place-items:center;color:#cfd6df;padding:20px;text-align:center}
+.stepbar{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto;gap:8px;align-items:center;margin-top:10px}
+.stepbar input[type=range]{width:100%;accent-color:var(--blue);height:44px}
+.cap{min-height:52px;margin-top:6px;padding:10px 14px;border-left:4px solid var(--blue);background:var(--panel);font-size:15px}
+.cap b{font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:14px}
+.st{background:var(--bg);padding:12px 14px}
+.st .k{font-size:13px;color:var(--mute)}
+.st .v{font:400 34px/1 "Bebas Neue",Arial,sans-serif;margin-top:4px;white-space:nowrap}
+.st .v small{display:block;margin-top:4px;font:500 13px Roboto,Arial,sans-serif;color:var(--mute);white-space:normal}
+.meter{height:6px;background:var(--line);margin-top:8px;border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--blue)}
+.meter.over i{background:var(--warn)}
+.warns{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.warns li{padding:8px 12px;border:1px solid var(--warn);color:var(--warn);border-radius:4px;font-size:14px}
+.warns li.okk{border-color:var(--ok);color:var(--ok)}
+.export{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.export h3{font-size:24px;margin-right:6px}
+.band{padding:22px max(2.4vw,16px) 40px;border-top:1px solid var(--line)}
+.band h2{font-size:30px;margin-bottom:10px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 12px 0 6px;border:1px solid var(--line);border-radius:18px;background:var(--field);font-size:14px}
+.chip i{width:22px;height:22px;border-radius:50%;background:var(--c);border:1px solid rgba(0,0,0,.3)}
+.chip[aria-pressed=true]{border-color:var(--blue-ink);box-shadow:0 0 0 2px var(--blue-ink) inset}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-weight:500;color:var(--mute);border-bottom:2px solid var(--ink);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.cur td{background:light-dark(#e6f0fa,#10243a)}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;background:var(--c);vertical-align:-2px;margin-right:7px;border:1px solid rgba(0,0,0,.35)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;place-items:center;padding:16px;z-index:50}
+.modal.on{display:grid}
+.box{background:var(--bg);color:var(--ink);border-radius:6px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:20px;border-top:5px solid var(--blue)}
+.box h2{font-size:30px;margin-bottom:8px}
+.box textarea{width:100%;min-height:200px;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink)}
+.plans{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px}
+.plans li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px}
+.plans li small{display:block;color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:10px 16px;border-radius:4px;border-left:4px solid var(--blue);z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.sample{font-size:12px;color:var(--mute)}
+footer{padding:14px max(2.4vw,16px) 26px;font-size:12px;color:var(--mute);border-top:1px solid var(--line)}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+@media(max-width:900px){.main{grid-template-columns:minmax(0,1fr)}.main>aside{grid-column:1;grid-row:2;border-right:0;border-top:1px solid var(--line)}.main>.stage{grid-column:1;grid-row:1}.brand h1{font-size:28px}}
+@media(max-width:600px){.logo{height:32px}.brand h1{font-size:24px}.r2{grid-template-columns:repeat(3,minmax(0,1fr))}.stepbar{grid-template-columns:auto auto minmax(0,1fr) auto}.stepbar .play{display:none}table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:7em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6.5em;margin-inline-start:-7em;color:var(--mute)}.stack td:empty{display:none}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img class="logo" src="@LOGO@" alt="4Wall Entertainment"><h1>Truck Pack <span>Planner</span></h1></div>
+  <div class="job"><input id="jobName" aria-label="Job name" placeholder="Job name or number"></div>
+  <div class="acts">
+    <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button class="btn" id="newBtn">New</button>
+    <button class="btn" id="openBtn" disabled>Open</button>
+    <button class="btn pri" id="saveBtn" disabled>Save plan</button>
+  </div>
+</header>
+
+<div class="main">
+  <section class="stage">
+    <div class="ttabs" id="ttabs" role="group" aria-label="Trucks"></div>
+    <div class="vbar">
+      <div class="seg" role="group" aria-label="View">
+        <button data-v="iso" aria-pressed="true">3D</button><button data-v="top" aria-pressed="false">Top</button><button data-v="side" aria-pressed="false">Side</button><button data-v="rear" aria-pressed="false">From doors</button>
+      </div>
+      <button class="btn sm" id="fitBtn">Reset view</button>
+    </div>
+    <div class="vp" id="vp"><div class="tag" id="vpTag"></div></div>
+    <div class="stepbar">
+      <button class="btn sm" id="prevBtn" aria-label="Previous step">◀</button>
+      <button class="btn sm" id="nextBtn" aria-label="Next step">▶</button>
+      <input type="range" id="stepR" min="0" max="0" value="0" aria-label="Load step">
+      <button class="btn sm play" id="playBtn">Play</button>
+      <button class="btn sm" id="allBtn">Show all</button>
+    </div>
+    <div class="cap" id="cap"></div>
+    <div class="adj" id="adj" hidden>
+      <div class="hd"><b id="adjT"></b><span class="pos" id="adjPos"></span></div>
+      <div class="adjb">
+        <div class="grp"><button class="btn sm pri" data-a="rot" title="R">Turn 90°</button></div>
+        <div class="grp"><button class="btn sm" data-a="nose" title="Left arrow">◀ Nose</button><button class="btn sm" data-a="doors" title="Right arrow">Doors ▶</button><button class="btn sm" data-a="driver" title="Up arrow">▲ Driver</button><button class="btn sm" data-a="curb" title="Down arrow">Curb ▼</button><label class="sr" for="adjStep" style="font-size:13px;color:var(--mute)">by</label><select id="adjStep" aria-label="Step size"></select></div>
+        <div class="grp"><button class="btn sm" data-a="snose">Slide to nose</button><button class="btn sm" data-a="sdriver">Slide to driver wall</button><button class="btn sm" data-a="scurb">Slide to curb wall</button></div>
+        <div class="grp"><button class="btn sm" data-a="done">Done</button></div>
+      </div>
+      <p id="adjMsg" role="status"></p>
+    </div>
+    <div class="manual" id="manual" hidden><span>This truck's layout has been adjusted by hand. Cases you add are fitted around it.</span><button class="btn sm" id="autoBtn">Back to auto layout</button></div>
+    <div class="stats" id="stats"></div>
+    <ul class="warns" id="warns"></ul>
+    <div class="export">
+      <h3>Send to crew</h3>
+      <select id="xScope" aria-label="Which trucks to export"><option value="all">All trucks</option><option value="this">This truck only</option></select>
+      <button class="btn pri" data-x="pdf">PDF load sheet</button>
+      <button class="btn" data-x="html">3D viewer file</button>
+      <button class="btn" data-x="png">Image of this view</button>
+      <button class="btn" data-x="csv">Load list (CSV)</button>
+      <button class="btn" data-x="copy">Copy load list</button>
+    </div>
+    <p class="hint" id="dlNote"></p>
+  </section>
+
+  <aside>
+    <div class="sec">
+      <h2><span id="truckH">Truck</span> <small id="truckCap"></small></h2>
+      <label class="f">Truck name<input id="tName" placeholder="Truck 1" aria-describedby="truckHint"></label>
+      <label class="f" style="margin-top:8px">Vehicle<select id="truckSel"></select></label>
+      <div class="g3" style="margin-top:8px">
+        <label class="f"><span>Inside length <b class="u"></b></span><input id="tL" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Inside width <b class="u"></b></span><input id="tW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Inside height <b class="u"></b></span><input id="tH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Door width <b class="u"></b></span><input id="tDW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Door height <b class="u"></b></span><input id="tDH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f"><span>Payload <b class="uw"></b></span><input id="tP" type="number" step="any" inputmode="decimal"></label>
+      </div>
+      <p class="hint">Presets are typical rental sizes. Measure or confirm the actual truck with the vendor; wheel wells, liftgates and door tracks vary.</p>
+      <p class="hint" id="truckHint" hidden>Use the tabs above the 3D view to switch trucks. Each case type can go in a set truck or stay on Auto, which fills the trucks in tab order and spills into the next one.</p>
+      <button class="btn sm" id="rmTruck" hidden>Remove this truck</button>
+    </div>
+
+    <div class="sec">
+      <h2>Cases <small id="caseCap"></small></h2>
+      <div class="cases" id="cases"></div>
+      <div class="addrow">
+        <button class="btn pri" id="addBtn">Add case type</button>
+        <button class="btn" id="pasteBtn">Paste from spreadsheet</button>
+      </div>
+      <p class="hint">Order sets load order: 1 goes in first, at the nose. Give "first off at the venue" gear the highest number.</p>
+      <p class="sample" id="sampleNote">Sample job loaded so you can see how it works. Replace it with your own cases, or press New.</p>
+    </div>
+
+    <div class="sec">
+      <h2 id="rsH">Load bars and straps</h2>
+      <div class="rsl" id="rsl"></div>
+      <p class="hint">Each one goes across the truck right behind that order group, and the next group loads behind it. Load bars take 3" of floor, straps 1". To put one in the middle of a group, split those cases into two order numbers.</p>
+    </div>
+
+    <details class="sec rules">
+      <summary>Packing rules</summary>
+      <label class="f" style="margin-top:6px">Units
+        <select id="units"><option value="imperial">Inches and pounds</option><option value="metric">Centimetres and kilograms</option></select></label>
+      <div class="g3" style="margin-top:8px">
+        <label class="f"><span>Gap between cases <b class="u"></b></span><input id="rGap" type="number" step="any" min="0"></label>
+        <label class="f"><span>Max stack height <b class="u"></b></span><input id="rMax" type="number" step="any" min="0" placeholder="Ceiling"></label>
+        <label class="f"><span>Min support %</span><input id="rSup" type="number" step="5" min="50" max="100"></label>
+      </div>
+      <label class="row"><input type="checkbox" id="rHeavy"> Never put a heavier case on a lighter one</label>
+      <label class="row"><input type="checkbox" id="rStrict"> Keep each load-order group in its own section</label>
+      <div class="row" style="flex-wrap:wrap;margin-top:6px">Set every case to sit on: <button class="btn sm" data-bulk="same">Same case only</button><button class="btn sm" data-bulk="any">Any case</button></div>
+      <p class="hint">Cases stay upright (flight cases are never laid on their sides). "Can turn sideways" lets a case rotate 90° on the floor. "Same case only" is for cases with caster cups in the lid: a case sits only on an identical case, lined up so its wheels drop into the cups. "Max stack" is how many cases high, counting the bottom one; blank means as high as fits. In a mixed stack the lowest limit wins.</p>
+    </details>
+  </aside>
+</div>
+
+<section class="band" id="byTruck" hidden>
+  <h2>Gear by truck</h2>
+  <div class="scroll"><table class="stack" id="byT"><thead><tr><th>Truck</th><th>Vehicle</th><th class="n">Cases</th><th class="n">Weight</th><th class="n">Floor used</th><th>What's in it</th></tr></thead><tbody></tbody></table></div>
+</section>
+<section class="band">
+  <h2 id="seqH">Load sequence</h2>
+  <div class="legend" id="legend"></div>
+  <div class="scroll"><table class="stack" id="seqT"><thead><tr><th class="n">Case #</th><th>Case</th><th>Size (along × across × high)</th><th>Long side</th><th class="n">Weight</th><th class="n">From nose</th><th>Side</th><th>Level</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+<footer>4Wall Entertainment · Truck Pack Planner. Saved plans are shared with everyone who can open this page. The auto-pack is a starting point; the crew chief has the final say on the load.</footer>
+
+<div class="modal" id="pasteM" role="dialog" aria-modal="true" aria-labelledby="pasteH"><div class="box">
+  <h2 id="pasteH">Paste cases</h2>
+  <p class="hint">Copy rows from Excel or Google Sheets in this column order: <b>Name, Length, Width, Height, Weight, Qty</b>. Weight can be blank. Dimensions in <b class="u"></b>, weight in <b class="uw"></b>. A header row is skipped.</p>
+  <textarea id="pasteTx" placeholder="Moving light 2-pack	48	27	39	320	6&#10;Cable trunk	48	24	30		4"></textarea>
+  <p class="hint" id="pasteMsg"></p>
+  <div class="addrow"><button class="btn pri" id="pasteGo">Add cases</button><button class="btn" data-close>Cancel</button></div>
+</div></div>
+
+<div class="modal" id="openM" role="dialog" aria-modal="true" aria-labelledby="openH"><div class="box">
+  <h2 id="openH">Saved plans</h2>
+  <ul class="plans" id="plans"></ul>
+  <div class="addrow"><button class="btn" data-close>Close</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/*@ENGINE@*/
+/*@VIEWER@*/
+{
+const LOGO = '@LOGO@';
+const PRESETS = [
+  { k: 'van', name: 'Cargo van, high roof', L: 172, W: 70, H: 79, doorW: 61, doorH: 71, payload: 3500 },
+  { k: 'box16', name: "16' box truck", L: 192, W: 92, H: 90, doorW: 84, doorH: 82, payload: 5500 },
+  { k: 'box20', name: "20' box truck", L: 240, W: 96, H: 96, doorW: 88, doorH: 88, payload: 7000 },
+  { k: 'box24', name: "24' box truck", L: 288, W: 97, H: 97, doorW: 92, doorH: 90, payload: 10000 },
+  { k: 'box26', name: "26' box truck", L: 311, W: 97, H: 103, doorW: 92, doorH: 96, payload: 10000 },
+  { k: 'tr48', name: "48' trailer", L: 570, W: 100, H: 110, doorW: 98, doorH: 106, payload: 44000 },
+  { k: 'tr53', name: "53' trailer", L: 630, W: 100, H: 110, doorW: 98, doorH: 106, payload: 44000 },
+  { k: 'custom', name: 'Custom size' }
+];
+const PAL = ['#e6194b', '#3cb44b', '#ffe119', '#4f8ef7', '#f58231', '#a05ad8', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9a6324', '#fffac8', '#b5121b', '#aaffc3', '#808000', '#ffd8b1', '#7f8cff', '#a9a9a9'];
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const RULES0 = { gap: 0, support: 75, heavyBottom: true, strictGroups: false, maxStack: 0 };
+function sample() {
+  const c = (name, l, w, h, wt, qty, group, o) => Object.assign({ id: uid(), name, l, w, h, wt, qty, group, rotate: true, stack: true, sitOn: 'same', truckId: 'auto' }, o || {});
+  const list = [
+    c('Cable trunk', 48, 24, 30, 300, 6, 1), c('LED panel case', 44, 26, 34, 360, 4, 1, { maxStack: 2 }), c('Power distro rack', 30, 24, 48, 400, 2, 1),
+    c('Moving light 2-pack', 48, 27, 39, 320, 6, 2, { maxStack: 2 }), c('Line array 4-pack', 50, 30, 36, 420, 2, 2), c('LED wash 4-pack', 46, 24, 30, 260, 4, 2),
+    c('Lighting console', 60, 30, 22, 180, 1, 3, { stack: false, sitOn: 'floor' }), c('Video rack 8RU', 30, 24, 22, 150, 2, 3), c('Chain motor 1T', 24, 20, 26, 140, 8, 4)
+  ];
+  list.forEach((x, i) => x.color = PAL[i % PAL.length]); return list;
+}
+function newTruck(n, key) { const p = PRESETS.find(p => p.k === (key && key !== 'custom' ? key : 'box26')); return { id: uid(), name: 'Truck ' + n, truckKey: p.k, truck: Object.assign({}, p), restraints: {}, pins: null }; }
+function fresh(withSample) {
+  const t = newTruck(1); if (withSample) t.restraints = { 1: 'bar2', 2: 'strap2', 4: 'bar1' };
+  return { job: withSample ? 'Sample: Ballroom general session' : '', units: 'imperial', trucks: [t], activeId: t.id, cases: withSample ? sample() : [], rules: Object.assign({}, RULES0), planId: null, isSample: !!withSample };
+}
+function normalize(o) {
+  if (!Array.isArray(o.trucks) || !o.trucks.length) {
+    o.trucks = [{ id: uid(), name: 'Truck 1', truckKey: o.truckKey || 'box26', truck: o.truck || Object.assign({}, PRESETS[4]), restraints: o.restraints || {}, pins: null }];
+    delete o.truck; delete o.truckKey; delete o.restraints;
+  }
+  o.trucks.forEach(t => { t.restraints = t.restraints || {}; if (t.pins === undefined) t.pins = null; });
+  if (!o.trucks.some(t => t.id === o.activeId)) o.activeId = o.trucks[0].id;
+  o.cases = Array.isArray(o.cases) ? o.cases : []; o.rules = Object.assign({}, RULES0, o.rules || {});
+  return o;
+}
+let S = fresh(true);
+try { const d = JSON.parse(localStorage.getItem('tp-draft') || 'null'); if (d && Array.isArray(d.cases)) S = normalize(d); } catch (e) { }
+const AT = () => S.trucks.find(t => t.id === S.activeId) || S.trucks[0];
+const multi = () => S.trucks.length > 1;
+const hist = [];
+let result = null, plan = null, plans = [], unplacedAll = [], viewer = null, dl = null, db = null, plansUnsub = null, playT = null, sel = null;
+
+const met = () => S.units === 'metric';
+const r1 = n => Math.round(n * 10) / 10, r2 = n => Math.round(n * 100) / 100;
+const lenOut = i => i == null || i === '' ? '' : r1(met() ? i * 2.54 : i);
+const lenIn = v => v === '' ? '' : (met() ? +v / 2.54 : +v);
+const wtOut = w => w == null || w === '' ? '' : r1(met() ? w * 0.45359237 : w);
+const wtIn = v => v === '' ? '' : (met() ? +v / 0.45359237 : +v);
+const uL = () => met() ? 'cm' : 'in', uW = () => met() ? 'kg' : 'lb';
+function fmtLen(i) {
+  if (i == null) return '–';
+  if (met()) { const cm = i * 2.54; return cm >= 100 ? (cm / 100).toFixed(2) + ' m' : Math.round(cm) + ' cm'; }
+  const t = Math.round(i), f = Math.floor(t / 12), n = t % 12; return f ? f + "' " + n + '"' : n + '"';
+}
+const fmtDim = (a, b, c) => [a, b, c].map(v => Math.round(met() ? v * 2.54 : v)).join(' × ') + ' ' + uL();
+const fmtWt = w => w == null ? '–' : Math.round(met() ? w * 0.45359237 : w).toLocaleString() + ' ' + uW();
+const typeOf = id => S.cases.find(c => c.id === id);
+const keyOf = b => b.typeId + '#' + b.idx;
+function ranges(a) { a = [...a].sort((x, y) => x - y); const out = []; for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i ? a[i] + '–' + a[j] : String(a[i])); i = j; } return out.join(', '); }
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600); }
+function snapshot() { return JSON.stringify({ job: S.job, units: S.units, trucks: S.trucks, cases: S.cases, rules: S.rules }); }
+function persist() { try { localStorage.setItem('tp-draft', JSON.stringify(S)); } catch (e) { } }
+function commit() { const s = snapshot(); if (hist[hist.length - 1] !== s) { hist.push(s); if (hist.length > 80) hist.shift(); } $('#undoBtn').disabled = hist.length < 2; persist(); }
+function undo() { if (hist.length < 2) return; hist.pop(); Object.assign(S, JSON.parse(hist[hist.length - 1])); normalize(S); sel = null; renderAll(); $('#undoBtn').disabled = hist.length < 2; persist(); toast('Undone'); }
+
+/* ---------- Trucks + rules ---------- */
+function renderTruck() {
+  const tr = AT(), t = tr.truck, i = S.trucks.indexOf(tr);
+  $('#truckSel').innerHTML = PRESETS.map(p => `<option value="${p.k}">${esc(p.name)}</option>`).join('');
+  $('#truckSel').value = tr.truckKey; $('#tName').value = tr.name;
+  $('#truckH').textContent = multi() ? 'Truck ' + (i + 1) + ' of ' + S.trucks.length : 'Truck';
+  $('#rmTruck').hidden = !multi(); $('#rmTruck').dataset.sure = ''; $('#rmTruck').textContent = 'Remove this truck';
+  $('#tL').value = lenOut(t.L); $('#tW').value = lenOut(t.W); $('#tH').value = lenOut(t.H);
+  $('#tDW').value = lenOut(t.doorW); $('#tDH').value = lenOut(t.doorH); $('#tP').value = wtOut(t.payload);
+  $$('.u').forEach(e => e.textContent = uL()); $$('.uw').forEach(e => e.textContent = uW());
+  $('#truckCap').textContent = fmtLen(t.L) + ' × ' + fmtLen(t.W) + ' × ' + fmtLen(t.H);
+  $('#units').value = S.units;
+  $('#rGap').value = lenOut(S.rules.gap); $('#rMax').value = S.rules.maxStack ? lenOut(S.rules.maxStack) : ''; $('#rSup').value = S.rules.support;
+  $('#rHeavy').checked = !!S.rules.heavyBottom; $('#rStrict').checked = !!S.rules.strictGroups;
+  $('#jobName').value = S.job || '';
+}
+$('#truckSel').addEventListener('change', e => {
+  const tr = AT(), p = PRESETS.find(p => p.k === e.target.value); tr.truckKey = p.k;
+  if (p.k !== 'custom') tr.truck = Object.assign({}, p); else tr.truck = Object.assign({}, tr.truck, { name: 'Custom size', k: 'custom' });
+  renderTruck(); repack(); commit();
+});
+$('#tName').addEventListener('input', e => { AT().name = e.target.value || 'Truck'; if (plan) plan.name = AT().name; renderTabs(); });
+$('#tName').addEventListener('change', () => { renderCases(); repack(); commit(); });
+[['tL', 'L'], ['tW', 'W'], ['tH', 'H'], ['tDW', 'doorW'], ['tDH', 'doorH']].forEach(([id, k]) => {
+  $('#' + id).addEventListener('input', e => { const v = lenIn(e.target.value); if (v > 0) { AT().truck[k] = v; markCustom(); repackSoon(); } });
+  $('#' + id).addEventListener('change', commit);
+});
+$('#tP').addEventListener('input', e => { AT().truck.payload = wtIn(e.target.value) || 0; markCustom(); repackSoon(); });
+$('#tP').addEventListener('change', commit);
+function markCustom() { const tr = AT(); if (tr.truckKey !== 'custom') { tr.truckKey = 'custom'; tr.truck.name = 'Custom (' + (PRESETS.find(p => p.k === tr.truck.k) || {}).name + ')'; $('#truckSel').value = 'custom'; } $('#truckCap').textContent = fmtLen(tr.truck.L) + ' × ' + fmtLen(tr.truck.W) + ' × ' + fmtLen(tr.truck.H); }
+$('#rmTruck').addEventListener('click', e => {
+  const b = e.currentTarget; if (!multi()) return;
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Remove ' + AT().name + '?'; return; }
+  const gone = AT(); S.trucks = S.trucks.filter(t => t !== gone); S.cases.forEach(c => { if (c.truckId === gone.id) c.truckId = 'auto'; });
+  S.activeId = S.trucks[0].id; sel = null; renderAll(); commit(); toast(gone.name + ' removed. Its cases are back on Auto.');
+});
+function addTruck() {
+  const t = newTruck(S.trucks.length + 1, AT().truckKey); S.trucks.push(t); S.activeId = t.id; sel = null;
+  renderAll(); commit(); toast(t.name + ' added. Cases on Auto fill the trucks in order.');
+}
+$('#units').addEventListener('change', e => { S.units = e.target.value; renderAll(); commit(); });
+$('#rGap').addEventListener('input', e => { S.rules.gap = Math.max(0, lenIn(e.target.value) || 0); repackSoon(); });
+$('#rMax').addEventListener('input', e => { S.rules.maxStack = Math.max(0, lenIn(e.target.value) || 0); repackSoon(); });
+$('#rSup').addEventListener('input', e => { S.rules.support = Math.min(100, Math.max(50, +e.target.value || 75)); repackSoon(); });
+$('#rHeavy').addEventListener('change', e => { S.rules.heavyBottom = e.target.checked; repack(); commit(); });
+$('#rStrict').addEventListener('change', e => { S.rules.strictGroups = e.target.checked; repack(); commit(); });
+['rGap', 'rMax', 'rSup'].forEach(id => $('#' + id).addEventListener('change', commit));
+$('#jobName').addEventListener('input', e => { S.job = e.target.value; persist(); });
+$('#jobName').addEventListener('change', commit);
+
+function renderTabs() {
+  $('#ttabs').innerHTML = plans.map(p => `<button class="ttab" data-tid="${esc(p.id)}" aria-pressed="${p.id === S.activeId}"><b>${esc(p.name)}</b><small>${esc(p.truck.name)} · ${p.boxes.length} case${p.boxes.length === 1 ? '' : 's'}${p.manual ? ' · hand-adjusted' : ''}</small></button>`).join('')
+    + `<button class="ttab add" data-add>+ Add truck</button>`;
+  $('#xScope').hidden = !multi();
+}
+$('#ttabs').addEventListener('click', e => {
+  if (e.target.closest('[data-add]')) return addTruck();
+  const b = e.target.closest('[data-tid]'); if (!b || b.dataset.tid === S.activeId) return;
+  S.activeId = b.dataset.tid; sel = null; persist(); showActive();
+});
+
+/* ---------- Cases ---------- */
+function caseRow(c) {
+  const tsel = multi() ? `<label>Truck <select data-k="truckId" aria-label="Truck for ${esc(c.name)}">${[['auto', 'Auto (fill in order)']].concat(S.trucks.map(t => [t.id, t.name])).map(([v, t]) => `<option value="${esc(v)}" ${(S.trucks.some(x => x.id === c.truckId) ? c.truckId : 'auto') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : '';
+  return `<div class="case" data-id="${esc(c.id)}" style="--c:${esc(c.color)}">
+  <div class="r1"><input type="color" data-k="color" value="${esc(c.color)}" aria-label="Color for ${esc(c.name)}">
+  <input class="nm" data-k="name" value="${esc(c.name)}" placeholder="Case name" aria-label="Case name">
+  <label>Qty<input type="number" min="0" step="1" data-k="qty" value="${esc(c.qty)}" inputmode="numeric"></label>
+  <button class="del" data-del aria-label="Remove ${esc(c.name)}">×</button></div>
+  <div class="r2">
+   <label>Length<input type="number" step="any" min="0" data-k="l" value="${lenOut(c.l)}" inputmode="decimal"></label>
+   <label>Width<input type="number" step="any" min="0" data-k="w" value="${lenOut(c.w)}" inputmode="decimal"></label>
+   <label>Height<input type="number" step="any" min="0" data-k="h" value="${lenOut(c.h)}" inputmode="decimal"></label>
+   <label>Weight<input type="number" step="any" min="0" data-k="wt" value="${wtOut(c.wt)}" placeholder="opt." inputmode="decimal"></label>
+   <label>Order<input type="number" step="1" min="1" data-k="group" value="${esc(c.group)}" inputmode="numeric"></label>
+  </div>
+  <div class="r3"><label><input type="checkbox" data-k="rotate" ${c.rotate !== false ? 'checked' : ''}> Can turn sideways</label>
+  <label><input type="checkbox" data-k="stack" ${c.stack !== false ? 'checked' : ''}> Cases can stack on top</label>
+  <label>Max stack <input type="number" min="1" step="1" data-k="maxStack" value="${esc(c.maxStack || '')}" placeholder="Any" inputmode="numeric" class="mini" aria-label="Most cases high for ${esc(c.name)}"></label>
+  <label>Sits on <select data-k="sitOn" aria-label="What ${esc(c.name)} can sit on">${[['same', 'Same case only'], ['any', 'Any case'], ['floor', 'Floor only']].map(([v, t]) => `<option value="${v}" ${(c.sitOn || 'same') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+  ${tsel}<span class="where" data-where></span><span class="note" data-note></span></div></div>`;
+}
+function renderCases() {
+  $('#cases').innerHTML = S.cases.length ? S.cases.map(caseRow).join('') : '<p class="hint">No cases yet. Add a case type or paste a list from a spreadsheet.</p>';
+  const n = S.cases.reduce((a, c) => a + (+c.qty || 0), 0);
+  $('#caseCap').textContent = S.cases.length + ' types · ' + n + ' cases · dims in ' + uL();
+  $('#sampleNote').style.display = S.isSample ? '' : 'none';
+  $('#truckHint').hidden = !multi();
+}
+$('#cases').addEventListener('input', e => {
+  const row = e.target.closest('.case'), k = e.target.dataset.k; if (!row || !k) return;
+  const c = typeOf(row.dataset.id); if (!c) return; const v = e.target.value;
+  if (k === 'name') c.name = v;
+  else if (k === 'color') { c.color = v; row.style.setProperty('--c', v); }
+  else if (k === 'rotate' || k === 'stack') c[k] = e.target.checked;
+  else if (k === 'sitOn' || k === 'truckId') c[k] = v;
+  else if (k === 'maxStack') c.maxStack = parseInt(v) > 0 ? parseInt(v) : '';
+  else if (k === 'wt') c.wt = v === '' ? '' : wtIn(v);
+  else if (k === 'qty' || k === 'group') c[k] = Math.max(k === 'group' ? 1 : 0, parseInt(v) || 0);
+  else c[k] = lenIn(v) || 0;
+  S.isSample = false; repackSoon();
+});
+$('#cases').addEventListener('change', commit);
+$('#cases').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  const id = b.closest('.case').dataset.id; S.cases = S.cases.filter(c => c.id !== id);
+  renderCases(); repack(); commit(); toast('Case type removed. Undo brings it back.');
+});
+function nextColor() { const used = new Set(S.cases.map(c => c.color)); return PAL.find(p => !used.has(p)) || PAL[S.cases.length % PAL.length]; }
+const blankCase = o => Object.assign({ id: uid(), name: 'New case', l: 0, w: 0, h: 0, wt: '', qty: 1, group: 1, rotate: true, stack: true, sitOn: 'same', truckId: 'auto', color: nextColor() }, o || {});
+$('#addBtn').addEventListener('click', () => {
+  S.cases.push(blankCase()); S.isSample = false; renderCases(); commit();
+  const ins = $$('.case .nm'); const last = ins[ins.length - 1]; last.focus(); last.select();
+});
+function openM(id) { $(id).classList.add('on'); const f = $(id).querySelector('textarea,button'); if (f) f.focus(); }
+function closeM() { $$('.modal').forEach(m => m.classList.remove('on')); }
+$$('[data-close]').forEach(b => b.addEventListener('click', closeM));
+$$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeM(); }));
+const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($$('.modal.on').length) return closeM(); if (sel) { sel = null; renderAdj(); } return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !typing()) { e.preventDefault(); undo(); return; }
+  if (typing() || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (sel) {
+    const m = { ArrowLeft: 'nose', ArrowRight: 'doors', ArrowUp: 'driver', ArrowDown: 'curb', r: 'rot', R: 'rot' }[e.key];
+    if (m) { e.preventDefault(); adjust(m); } return;
+  }
+  if (e.key === 'ArrowRight') stepBy(1); if (e.key === 'ArrowLeft') stepBy(-1);
+});
+$('#pasteBtn').addEventListener('click', () => { $('#pasteMsg').textContent = ''; openM('#pasteM'); });
+$('#pasteGo').addEventListener('click', () => {
+  const rows = $('#pasteTx').value.split(/\r?\n/).map(r => r.split(r.includes('\t') ? '\t' : ',').map(s => s.trim())).filter(r => r.length >= 4 && r[0]);
+  let added = 0, skipped = 0;
+  rows.forEach(r => {
+    const [name, l, w, h, wt, q] = r; const n = [l, w, h].map(parseFloat);
+    if (n.some(x => !(x > 0))) { skipped++; return; }
+    S.cases.push(blankCase({ name, l: lenIn(n[0]), w: lenIn(n[1]), h: lenIn(n[2]), wt: wt && parseFloat(wt) > 0 ? wtIn(parseFloat(wt)) : '', qty: Math.max(1, parseInt(q) || 1) }));
+    added++;
+  });
+  if (!added) { $('#pasteMsg').textContent = 'No rows with a name and three dimensions were found.'; return; }
+  S.isSample = false; renderCases(); repack(); commit(); closeM(); $('#pasteTx').value = '';
+  toast(added + ' case type' + (added > 1 ? 's' : '') + ' added' + (skipped ? ', ' + skipped + ' row' + (skipped > 1 ? 's' : '') + ' skipped' : ''));
+});
+
+/* ---------- Restraints ---------- */
+const RC = { none: { t: 0, label: 'None', parts: [] }, bar1: { t: 3, label: '1 load bar', parts: ['bar'] }, bar2: { t: 3, label: '2 load bars', parts: ['bar', 'bar'] }, strap1: { t: 1, label: '1 ratchet strap', parts: ['strap'] }, strap2: { t: 1, label: '2 ratchet straps', parts: ['strap', 'strap'] }, barstrap: { t: 3, label: 'Load bar + ratchet strap', parts: ['bar', 'strap'] } };
+function groupsHere() {
+  const tr = AT(), gs = new Set(plan ? plan.boxes.map(b => b.grp) : []);
+  S.cases.forEach(c => { if (+c.qty > 0 && (c.truckId === tr.id || (!multi() && true))) gs.add(+c.group || 1); });
+  return [...gs].sort((a, b) => a - b);
+}
+let rsKey = '';
+function renderRestraints(force) {
+  const tr = AT(), gs = groupsHere(), key = tr.id + '|' + gs.join(',') + '|' + JSON.stringify(tr.restraints);
+  if (!force && key === rsKey) return; rsKey = key;
+  $('#rsH').textContent = multi() ? 'Load bars and straps · ' + tr.name : 'Load bars and straps';
+  $('#rsl').innerHTML = gs.length ? gs.map((g, i) => `<label class="f">After order ${g}${i === gs.length - 1 ? ' (last group, at the doors)' : ''}<select data-g="${g}">${Object.entries(RC).map(([k, v]) => `<option value="${k}" ${(tr.restraints[g] || 'none') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>`).join('') : '<p class="hint">No cases in this truck yet.</p>';
+}
+$('#rsl').addEventListener('change', e => { const g = e.target.dataset.g; if (!g) return; const tr = AT(); if (e.target.value === 'none') delete tr.restraints[g]; else tr.restraints[g] = e.target.value; S.isSample = false; repack(); commit(); });
+$$('[data-bulk]').forEach(b => b.addEventListener('click', () => { S.cases.forEach(c => c.sitOn = b.dataset.bulk); renderCases(); repack(); commit(); toast('Every case set to sit on: ' + b.textContent.toLowerCase()); }));
+const hText = r => 'at ' + r.parts.map(p => fmtLen(p.h)).join(' and ') + ' off the floor';
+
+/* ---------- Packing ---------- */
+function sideOf(b, T) { const d = b.y < 2, c = b.y + b.W > T.W - 3; return d && c ? 'Full width' : d ? 'Driver wall' : c ? 'Curb wall' : 'Center'; }
+const isAuto = c => !c.truckId || c.truckId === 'auto' || !S.trucks.some(t => t.id === c.truckId);
+function buildPlans() {
+  const units = {}; S.cases.forEach(c => units[c.id] = Array.from({ length: Math.max(0, Math.floor(+c.qty || 0)) }, (_, i) => i + 1));
+  const reserved = {};
+  S.trucks.forEach(tr => {
+    if (!tr.pins) return;
+    Object.keys(tr.pins).forEach(k => { const [id, i] = k.split('#'), c = typeOf(id); if (!c || reserved[k] || !(isAuto(c) || c.truckId === tr.id) || !units[id].includes(+i)) return; reserved[k] = tr.id; });
+  });
+  plans = []; unplacedAll = [];
+  S.trucks.forEach((tr, ti) => {
+    const last = ti === S.trucks.length - 1;
+    const types = S.cases.filter(c => isAuto(c) || c.truckId === tr.id).map(c => Object.assign({}, c, { capped: isAuto(c) && !last, of: +c.qty, units: units[c.id].filter(i => { const r = reserved[c.id + '#' + i]; return !r || r === tr.id; }) })).filter(t => t.units.length);
+    const pins = tr.pins ? Object.entries(tr.pins).filter(([k]) => reserved[k] === tr.id).map(([k, p]) => { const [type, idx] = k.split('#'); return Object.assign({ type, idx: +idx }, p); }) : [];
+    const rt = {}; Object.entries(tr.restraints || {}).forEach(([g, k]) => { if (RC[k] && RC[k].t) rt[g] = RC[k].t; });
+    const res = packTruck(tr.truck, types, { gap: S.rules.gap, support: S.rules.support / 100, heavyBottom: S.rules.heavyBottom, strictGroups: S.rules.strictGroups, maxStack: S.rules.maxStack, restraints: rt, pins, payloadCap: last ? 0 : (+tr.truck.payload || 0) });
+    res.placed.forEach(p => units[p.type] = units[p.type].filter(i => i !== p.idx));
+    res.unplaced.forEach(u => { const c = typeOf(u.type); if (!isAuto(c) || last) { unplacedAll.push(Object.assign({ truck: isAuto(c) ? null : tr.name }, u)); units[u.type] = units[u.type].filter(i => i !== u.idx); } });
+    plans.push(makePlan(tr, res));
+  });
+  plan = plans.find(p => p.id === S.activeId) || plans[0]; result = plan.res;
+}
+function makePlan(tr, res) {
+  const T = tr.truck;
+  const boxes = res.placed.map(p => {
+    const t = typeOf(p.type);
+    return { kind: 'case', level: p.level, grp: p.grp, seq: p.seq, typeId: p.type, name: t.name || 'Case', color: t.color, idx: p.idx, of: p.of, x: p.x, y: p.y, z: p.z, L: p.L, W: p.W, H: p.H, wt: p.wt, on: p.on, rotated: p.rotated, pinned: p.pinned, side: sideOf(p, T), short: '' };
+  });
+  const rs = res.restraints.map(r => {
+    const c = RC[tr.restraints[r.grp]] || RC.bar1, fh = r.faceH || 24, fr = c.parts.length === 1 ? [0.6] : [0.35, 0.8];
+    return { kind: 'restraint', grp: r.grp, x: r.x, thick: r.thick, faceH: r.faceH, fits: r.fits, label: c.label, short: c.label.toUpperCase(), parts: c.parts.map((t, i) => ({ type: t, h: Math.max(6, Math.min(T.H - 4, fh * fr[i])) })), after: boxes.reduce((m, b) => b.grp <= r.grp ? Math.max(m, b.seq) : m, 0) };
+  });
+  const steps = []; let k = 0;
+  rs.filter(r => r.after === 0).forEach(r => { r.step = ++k; steps.push(r); });
+  boxes.forEach(b => { b.step = ++k; steps.push(b); rs.filter(r => r.after === b.seq).forEach(r => { r.step = ++k; steps.push(r); }); });
+  const legend = S.cases.filter(c => +c.qty > 0).map(c => { const mine = boxes.filter(b => b.typeId === c.id); return { id: c.id, name: c.name, color: c.color, qty: +c.qty, placed: mine.length, units: mine.map(b => b.idx), dims: fmtDim(c.l, c.w, c.h), wt: c.wt === '' ? null : c.wt }; }).filter(l => !multi() || l.placed > 0);
+  return { id: tr.id, name: tr.name, manual: !!tr.pins, res, restraints: rs, steps, job: S.job, units: S.units, truck: { name: T.name, L: T.L, W: T.W, H: T.H, doorW: T.doorW, doorH: T.doorH, payload: T.payload }, boxes, legend, stats: res.stats, created: new Date().toLocaleString() };
+}
+let soonT = null;
+function repackSoon() { clearTimeout(soonT); soonT = setTimeout(repack, 260); }
+function repack() {
+  const keepStep = sel ? null : null;
+  buildPlans(); renderTabs(); renderRestraints(); renderStats(); renderSeq(); renderLegend(); renderByTruck();
+  if (viewer) viewer.setPlan(plan);
+  setStep(plan.steps.length); renderAdj();
+  $$('.case').forEach(r => {
+    const id = r.dataset.id, miss = unplacedAll.filter(u => u.type === id);
+    r.querySelector('[data-note]').textContent = miss.length ? miss.length + ' not loaded: ' + miss[0].reason.toLowerCase() : '';
+    r.querySelector('[data-where]').textContent = multi() ? plans.map(p => { const n = p.boxes.filter(b => b.typeId === id).length; return n ? p.name + ': ' + n : ''; }).filter(Boolean).join(' · ') : '';
+    r.classList.toggle('bad', miss.length > 0);
+  });
+}
+function showActive() {
+  plan = plans.find(p => p.id === S.activeId) || plans[0]; result = plan.res;
+  renderTruck(); renderTabs(); renderRestraints(true); renderStats(); renderSeq(); renderLegend();
+  iso = null; if (viewer) { viewer.filter(null); viewer.setPlan(plan); }
+  setStep(plan.steps.length); renderAdj();
+}
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+function planWarnings(pl) {
+  const w = [], s = pl.stats, T = pl.truck, pay = T.payload || 0, who = multi() ? pl.name + ': ' : '';
+  pl.restraints.filter(r => !r.fits).forEach(r => w.push(`${who}no room for the ${r.label.toLowerCase()} after order ${r.grp}.`));
+  if (pay && s.weight > pay) w.push(`${who}over payload by ${fmtWt(s.weight - pay)}. Move some cases to another truck or use a bigger one.`);
+  if (s.cgX != null && Math.abs(s.cgY - T.W / 2) > 4) w.push(`${who}load leans ${fmtLen(Math.abs(s.cgY - T.W / 2))} toward the ${s.cgY < T.W / 2 ? 'driver' : 'curb'} side. Consider swapping heavy cases across.`);
+  if (s.count && s.weightKnown < s.count) w.push(`${who}${s.count - s.weightKnown} case${s.count - s.weightKnown > 1 ? 's have' : ' has'} no weight, so weight and balance are incomplete.`);
+  return w.map(x => x.charAt(0).toUpperCase() + x.slice(1));
+}
+function unplacedWarnings() {
+  const agg = {};
+  unplacedAll.forEach(u => { const k = u.type + '|' + u.reason + '|' + (u.truck || ''); agg[k] = (agg[k] || 0) + 1; });
+  return Object.entries(agg).map(([k, n]) => { const [id, r, t] = k.split('|'); return `${n} × ${(typeOf(id) || {}).name}${t && multi() ? ' (set to ' + t + ')' : ''}: ${r.toLowerCase()}.`; });
+}
+function renderStats() {
+  const s = result.stats, T = plan.truck, pay = T.payload || 0;
+  const totalQty = S.cases.reduce((a, c) => a + Math.max(0, Math.floor(+c.qty || 0)), 0), totalPlaced = plans.reduce((a, p) => a + p.boxes.length, 0);
+  const tiles = [
+    multi() ? ['Cases in this truck', `${s.count}<small>${totalPlaced} of ${totalQty} loaded across ${S.trucks.length} trucks</small>`, pct(totalPlaced, totalQty), totalPlaced < totalQty]
+      : ['Cases loaded', `${s.count}<small> of ${totalQty}</small>`, pct(s.count, totalQty), s.count < totalQty],
+    ['Floor length used', `${fmtLen(s.usedL)}<small> of ${fmtLen(T.L)}</small>`, pct(s.usedL, T.L), false],
+    ['Cube used', `${pct(s.volume, s.truckVol)}%<small> of the box</small>`, pct(s.volume, s.truckVol), false],
+    ['Load weight', `${fmtWt(s.weight)}${pay ? `<small> of ${fmtWt(pay)}</small>` : ''}`, pct(s.weight, pay), pay && s.weight > pay],
+  ];
+  let cg = '–', cgSub = 'Add weights to see balance';
+  if (s.cgX != null) { cg = fmtLen(s.cgX); const off = s.cgY - T.W / 2; cgSub = pct(s.cgX, T.L) + '% back from nose · ' + (Math.abs(off) < 1 ? 'centered' : fmtLen(Math.abs(off)) + ' toward ' + (off < 0 ? 'driver' : 'curb')); }
+  $('#stats').innerHTML = tiles.map(([k, v, p, over]) => `<div class="st"><div class="k">${k}</div><div class="v">${v}</div><div class="meter ${over ? 'over' : ''}"><i style="width:${Math.min(100, p)}%"></i></div></div>`).join('')
+    + `<div class="st"><div class="k">Center of weight from nose</div><div class="v">${cg}</div><div class="k" style="margin-top:6px">${esc(cgSub)}</div></div>`;
+  const w = unplacedWarnings().concat(planWarnings(plan), plans.filter(p => p !== plan && p.truck.payload && p.stats.weight > p.truck.payload).map(p => `${p.name} is over payload by ${fmtWt(p.stats.weight - p.truck.payload)}.`));
+  $('#warns').innerHTML = w.length ? w.map(x => `<li>${esc(x)}</li>`).join('') : (totalQty ? `<li class="okk">Everything fits${multi() ? ' across the trucks' : ''}, within payload.</li>` : '');
+  $('#manual').hidden = !plan.manual;
+}
+const facing = b => Math.abs(b.L - b.W) < 0.5 ? 'Square' : b.W > b.L ? 'Across the truck' : 'Along the truck';
+function posText(b) { return fmtLen(b.x) + ' from nose, ' + b.side.toLowerCase() + ', ' + (b.z < 0.5 ? 'on the floor' : 'on top of #' + b.on.join(', #')); }
+function renderSeq() {
+  $('#seqH').textContent = multi() ? 'Load sequence · ' + plan.name : 'Load sequence';
+  const rows = plan.steps.map(b => b.kind === 'restraint' ? `<tr class="rs" data-step="${b.step}"><td class="n"></td><td>${b.parts.map(p => `<span class="bar ${p.type === 'strap' ? 's' : ''}"></span>`).join('')}Install ${esc(b.label.toLowerCase())}</td><td>Across the truck, ${hText(b)}</td><td></td><td class="n"></td><td class="n">${fmtLen(b.x)}</td><td>Full width</td><td>Behind order ${b.grp}</td><td></td></tr>` : `<tr data-step="${b.step}"><td class="n">${b.seq}</td><td><span class="sw" style="--c:${esc(b.color)}"></span>${esc(b.name)} <span style="color:var(--mute)">${b.of > 1 ? b.idx + ' of ' + b.of : ''}</span>${b.pinned && plan.manual ? '' : ''}</td><td>${fmtDim(b.L, b.W, b.H)}</td><td>${facing(b)}</td><td class="n">${fmtWt(b.wt)}</td><td class="n">${fmtLen(b.x)}</td><td>${b.side}</td><td>${b.z < 0.5 ? 'Floor' : 'On #' + b.on.join(', #') + ' (' + b.level + ' high)'}</td><td><button class="btn sm" data-adj="${esc(keyOf(b))}">Adjust</button></td></tr>`);
+  $('#seqT tbody').innerHTML = rows.join('') || '<tr><td colspan="9">Nothing loaded in this truck yet.</td></tr>';
+}
+let iso = null;
+function renderLegend() {
+  $('#legend').innerHTML = plan.legend.map(l => `<button class="chip" data-t="${esc(l.id)}" aria-pressed="${iso === l.id}" style="--c:${esc(l.color)}"><i></i>${esc(l.name)} <span style="color:var(--mute)">${multi() ? '×' + l.placed : l.placed + '/' + l.qty}</span></button>`).join('');
+}
+$('#legend').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; iso = iso === c.dataset.t ? null : c.dataset.t; renderLegend(); if (viewer) viewer.filter(iso); });
+$('#seqT').addEventListener('click', e => { const ab = e.target.closest('[data-adj]'); if (ab) { selectCase(ab.dataset.adj); $('#vp').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; } const tr = e.target.closest('tr[data-step]'); if (tr) { if (sel) { sel = null; renderAdj(); } setStep(+tr.dataset.step); $('#vp').scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+function renderByTruck() {
+  $('#byTruck').hidden = !multi(); if (!multi()) return;
+  $('#byT tbody').innerHTML = plans.map(p => `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.truck.name)}</td><td class="n">${p.boxes.length}</td><td class="n">${fmtWt(p.stats.weight)}${p.truck.payload ? ' of ' + fmtWt(p.truck.payload) : ''}</td><td class="n">${fmtLen(p.stats.usedL)} of ${fmtLen(p.truck.L)}</td><td>${p.legend.map(l => `<span class="mini-chip"><span class="sw" style="--c:${esc(l.color)}"></span>${esc(l.name)} ×${l.placed}${l.qty > 1 ? ` <span style="color:var(--mute)">(#${ranges(l.units)})</span>` : ''}</span>`).join(' ') || '<span style="color:var(--mute)">Empty</span>'}</td></tr>`).join('');
+}
+
+/* ---------- Steps ---------- */
+function setStep(n) {
+  const max = plan ? plan.steps.length : 0; n = Math.max(0, Math.min(max, n));
+  $('#stepR').max = max; $('#stepR').value = n; if (viewer) viewer.setStep(n);
+  $$('#seqT tr.cur').forEach(r => r.classList.remove('cur'));
+  if (!max) { $('#cap').textContent = multi() ? 'Nothing in this truck yet. Assign cases to it, or let Auto overflow into it.' : 'Add cases to see the load.'; return; }
+  if (n === max) { const nr = plan.restraints.length; $('#cap').innerHTML = `<b>All ${plan.boxes.length} cases loaded${multi() ? ' in ' + esc(plan.name) : ''}${nr ? ', with ' + nr + ' load bar or strap position' + (nr > 1 ? 's' : '') : ''}.</b> Use ◀ ▶ to walk the load step by step. Click a case to adjust it by hand.`; return; }
+  const b = plan.steps[n - 1];
+  if (!b) { $('#cap').innerHTML = '<b>Empty truck.</b> Press ▶ to start loading.'; return; }
+  const tr = $(`#seqT tr[data-step="${n}"]`); if (tr) tr.classList.add('cur');
+  if (b.kind === 'restraint') { $('#cap').innerHTML = `<b>Step ${n} of ${max}: install ${esc(b.label.toLowerCase())}.</b> Across the truck at ${fmtLen(b.x)} from nose, ${hText(b)}, tight against the order ${b.grp} cases.${b.fits ? '' : ' <span style="color:var(--warn)">There is no room for it.</span>'}`; return; }
+  $('#cap').innerHTML = `<b>Step ${n} of ${max}: #${b.seq} ${esc(b.name)}${b.of > 1 ? ' (' + b.idx + ' of ' + b.of + ')' : ''}.</b> ${esc(posText(b))}.`;
+}
+function stepBy(d) { stopPlay(); if (sel) { sel = null; renderAdj(); } setStep(+$('#stepR').value + d); }
+$('#prevBtn').addEventListener('click', () => stepBy(-1));
+$('#nextBtn').addEventListener('click', () => stepBy(1));
+$('#allBtn').addEventListener('click', () => { stopPlay(); setStep(plan.steps.length); });
+$('#stepR').addEventListener('input', e => { stopPlay(); if (sel) { sel = null; renderAdj(); } setStep(+e.target.value); });
+function stopPlay() { clearInterval(playT); playT = null; $('#playBtn').textContent = 'Play'; }
+$('#playBtn').addEventListener('click', () => {
+  if (playT) return stopPlay();
+  if (sel) { sel = null; renderAdj(); }
+  if (+$('#stepR').value >= plan.steps.length) setStep(0);
+  $('#playBtn').textContent = 'Pause';
+  playT = setInterval(() => { const n = +$('#stepR').value + 1; if (n > plan.steps.length) return stopPlay(); setStep(n); }, 450);
+});
+$$('.seg button').forEach(b => b.addEventListener('click', () => { $$('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); if (viewer) viewer.setView(b.dataset.v); $('#vpTag').textContent = b.textContent; }));
+$('#fitBtn').addEventListener('click', () => viewer && viewer.setView(viewer.view));
+
+/* ---------- Hand adjust ---------- */
+const NUDGE = () => met() ? [[2.5 / 2.54, '2.5 cm'], [15 / 2.54, '15 cm'], [30 / 2.54, '30 cm']] : [[1, '1"'], [6, '6"'], [12, '12"']];
+let nudgeI = 1;
+function selectCase(k) { stopPlay(); sel = k; setStep(plan.steps.length); renderAdj(); $('#adjMsg').textContent = ''; }
+function renderAdj() {
+  const b = sel && plan && plan.boxes.find(x => keyOf(x) === sel);
+  if (!b) { sel = null; $('#adj').hidden = true; if (viewer) viewer.mark(null); return; }
+  $('#adj').hidden = false;
+  $('#adjT').innerHTML = `<span class="sw" style="--c:${esc(b.color)}"></span>#${b.seq} ${esc(b.name)}${b.of > 1 ? ' (' + b.idx + ' of ' + b.of + ')' : ''}`;
+  $('#adjPos').textContent = posText(b) + ' · ' + fmtDim(b.L, b.W, b.H) + ', long side ' + facing(b).toLowerCase().replace('square', 'square');
+  $('#adjStep').innerHTML = NUDGE().map(([v, t], i) => `<option value="${i}" ${i === nudgeI ? 'selected' : ''}>${t}</option>`).join('');
+  if (viewer) viewer.mark(b.step);
+}
+$('#adjStep').addEventListener('change', e => { nudgeI = +e.target.value; });
+const ovl = (a0, a1, b0, b1) => a0 < b1 - 0.01 && b0 < a1 - 0.01;
+function adjust(op) {
+  const P = plan.boxes, s = P.find(b => keyOf(b) === sel), T = plan.truck, msg = t => { $('#adjMsg').textContent = t; };
+  if (!s) return;
+  if (op === 'done') { sel = null; renderAdj(); return; }
+  const above = b => P.filter(o => o !== b && Math.abs(o.z - (b.z + b.H)) < 0.05 && ovl(o.x, o.x + o.L, b.x, b.x + b.L) && ovl(o.y, o.y + o.W, b.y, b.y + b.W));
+  const stack = [s]; for (let i = 0; i < stack.length; i++) above(stack[i]).forEach(o => { if (!stack.includes(o)) stack.push(o); });
+  const others = P.filter(o => !stack.includes(o));
+  const mv = stack.map(b => ({ b, x: b.x, y: b.y, z: b.z, L: b.L, W: b.W, H: b.H }));
+  const base = mv[0], step = NUDGE()[nudgeI][0];
+  const ovYZ = (m, o) => ovl(m.y, m.y + m.W, o.y, o.y + o.W) && ovl(m.z, m.z + m.H, o.z, o.z + o.H);
+  const ovXZ = (m, o) => ovl(m.x, m.x + m.L, o.x, o.x + o.L) && ovl(m.z, m.z + m.H, o.z, o.z + o.H);
+  let dx = 0, dy = 0;
+  if (op === 'rot') {
+    if (stack.length > 1) return msg('Cases are sitting on this one. Turn the top case, or move the cases on top first.');
+    const cx = base.x + base.L / 2, cy = base.y + base.W / 2; [base.L, base.W] = [base.W, base.L];
+    base.x = Math.min(Math.max(0, cx - base.L / 2), T.L - base.L); base.y = Math.min(Math.max(0, cy - base.W / 2), T.W - base.W);
+  }
+  else if (op === 'nose') dx = -step; else if (op === 'doors') dx = step; else if (op === 'driver') dy = -step; else if (op === 'curb') dy = step;
+  else if (op === 'snose') dx = Math.max(...mv.map(m => others.filter(o => ovYZ(m, o) && o.x + o.L <= m.x + 0.01).reduce((a, o) => Math.max(a, o.x + o.L), 0) - m.x));
+  else if (op === 'sdriver') dy = Math.max(...mv.map(m => others.filter(o => ovXZ(m, o) && o.y + o.W <= m.y + 0.01).reduce((a, o) => Math.max(a, o.y + o.W), 0) - m.y));
+  else if (op === 'scurb') dy = Math.min(...mv.map(m => others.filter(o => ovXZ(m, o) && o.y >= m.y + m.W - 0.01).reduce((a, o) => Math.min(a, o.y), T.W) - (m.y + m.W)));
+  if (op === 'nose' || op === 'snose') dx = Math.max(dx, -Math.min(...mv.map(m => m.x)));
+  if (op === 'driver' || op === 'sdriver') dy = Math.max(dy, -Math.min(...mv.map(m => m.y)));
+  if (op === 'doors') dx = Math.min(dx, Math.min(...mv.map(m => T.L - m.x - m.L)));
+  if (op === 'curb' || op === 'scurb') dy = Math.min(dy, Math.min(...mv.map(m => T.W - m.y - m.W)));
+  if (op !== 'rot' && Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return msg('It can’t go any further that way.');
+  mv.forEach(m => { m.x += dx; m.y += dy; });
+  const floorZ = others.filter(o => ovl(base.x, base.x + base.L, o.x, o.x + o.L) && ovl(base.y, base.y + base.W, o.y, o.y + o.W) && o.z + o.H <= base.z + 0.05).reduce((a, o) => Math.max(a, o.z + o.H), 0);
+  const dz = floorZ - base.z; mv.forEach(m => { m.z += dz; });
+  for (const m of mv) {
+    if (m.x < -0.01 || m.y < -0.01 || m.x + m.L > T.L + 0.01 || m.y + m.W > T.W + 0.01 || m.z + m.H > T.H + 0.01) return msg('That would put it outside the truck.');
+    const hit = others.find(o => ovl(m.x, m.x + m.L, o.x, o.x + o.L) && ovl(m.y, m.y + m.W, o.y, o.y + o.W) && ovl(m.z, m.z + m.H, o.z, o.z + o.H));
+    if (hit) return msg(`Blocked by #${hit.seq} ${hit.name}. Try a smaller step or move that case first.`);
+  }
+  const tr = AT(), pins = {}, moved = new Map(mv.map(m => [m.b, m]));
+  P.forEach(b => { const m = moved.get(b) || b; pins[keyOf(b)] = { x: r2(m.x), y: r2(m.y), z: r2(m.z), L: m.L, W: m.W }; });
+  tr.pins = pins;
+  repack(); commit();
+  const nb = plan.boxes.find(x => keyOf(x) === sel), c = typeOf(s.typeId), notes = [];
+  if (nb) {
+    const sup = nb.on.map(q => plan.boxes.find(x => x.seq === q)).filter(Boolean);
+    if (nb.z > 0.5 && c.sitOn === 'floor') notes.push('this case is set to floor only');
+    if (nb.z > 0.5 && (c.sitOn || 'same') === 'same' && sup.some(o => o.typeId !== nb.typeId || Math.abs(o.x - nb.x) > 0.5 || Math.abs(o.y - nb.y) > 0.5)) notes.push('it is no longer sitting square on its own case type');
+    if (sup.some(o => typeOf(o.typeId) && typeOf(o.typeId).stack === false)) notes.push('it sits on a case marked “nothing on top”');
+    if (op === 'rot' && c.rotate === false) notes.push('this case is marked as not turnable');
+  }
+  msg(notes.length ? 'Moved. Heads up: ' + notes.join('; ') + '.' : (stack.length > 1 ? `Moved, with the ${stack.length - 1} case${stack.length > 2 ? 's' : ''} on top.` : op === 'rot' ? 'Turned 90°.' : 'Moved.'));
+}
+$('#adj').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) adjust(b.dataset.a); });
+$('#autoBtn').addEventListener('click', () => { AT().pins = null; sel = null; repack(); commit(); toast('Back to the automatic layout. Undo restores your adjustments.'); });
+
+/* ---------- Exports ---------- */
+function b64ToBytes(u) { const s = atob(u.split(',')[1]), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+const fileBase = () => ((S.job || 'truck-pack').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'truck-pack');
+const scoped = () => (!multi() || $('#xScope').value === 'all') ? plans : [plan];
+const scopeTag = list => list.length === 1 && multi() ? '-' + list[0].name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') : '';
+async function save(filename, data) {
+  if (!dl) { toast('Downloads work when this page is opened in Claude.'); return; }
+  try { await dl.save({ filename, data }); } catch (e) { if (e && e.code !== 'declined') toast(e.code === 'host_unavailable' ? 'This app cannot save files. Open the page in a browser.' : 'Could not save the file (' + (e.code || 'error') + ').'); }
+}
+function csv(list) {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', u = uL();
+  const h = ['Truck', 'Vehicle', 'Step', 'Case #', 'Case', 'Unit', 'Of', `Length (${u})`, `Width (${u})`, `Height (${u})`, `Weight (${uW()})`, `From nose (${u})`, `From driver wall (${u})`, `Off floor (${u})`, 'Side', 'Rests on'];
+  const rows = [];
+  list.forEach(p => p.steps.forEach(b => rows.push((b.kind === 'restraint' ? [p.name, p.truck.name, b.step, '', 'Install ' + b.label.toLowerCase(), '', '', '', lenOut(p.truck.W), '', '', lenOut(b.x), '', b.parts.map(x => lenOut(x.h)).join(' / '), 'Full width', 'Behind order ' + b.grp]
+    : [p.name, p.truck.name, b.step, b.seq, b.name, b.idx, b.of, lenOut(b.L), lenOut(b.W), lenOut(b.H), wtOut(b.wt), lenOut(b.x), lenOut(b.y), lenOut(b.z), b.side, b.on.map(s => '#' + s).join(' ')]).map(q).join(','))));
+  unplacedAll.forEach(x => rows.push(['NOT LOADED', '', '', '', (typeOf(x.type) || {}).name, x.idx, '', '', '', '', '', '', '', '', x.reason, ''].map(q).join(',')));
+  return [h.map(q).join(',')].concat(rows).join('\r\n');
+}
+function listText(list) {
+  return (S.job || 'Truck pack') + '\n' + list.map(p => `\n== ${p.name} · ${p.truck.name} · ${p.boxes.length} cases ==\n` + p.steps.map(b => b.kind === 'restraint' ? `---- Install ${b.label.toLowerCase()} at ${fmtLen(b.x)} from nose, ${hText(b)} ----` : `#${b.seq}  ${b.name}${b.of > 1 ? ' (' + b.idx + '/' + b.of + ')' : ''}  ${posText(b)}`).join('\n')).join('\n')
+    + (unplacedAll.length ? '\n\nNot loaded: ' + unplacedAll.map(u => (typeOf(u.type) || {}).name + ' ' + u.idx).join(', ') : '');
+}
+function hexRgb(h) { const c = parseInt(h.slice(1), 16); return [c >> 16, c >> 8 & 255, c & 255]; }
+async function pdf(list) {
+  if (!window.jspdf) { toast('PDF library did not load.'); return; }
+  toast('Building PDF…'); await new Promise(r => setTimeout(r, 30));
+  const { jsPDF } = window.jspdf, d = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  const PW = 792, PH = 612, M = 36; let first = true;
+  const page = () => { if (!first) d.addPage(); first = false; };
+  const head = (title, sub) => {
+    d.addImage(LOGO, 'PNG', M, 26, 90, 28, 'logo', 'FAST');
+    d.setDrawColor(0, 94, 184); d.setLineWidth(2); d.line(M + 104, 26, M + 104, 54);
+    d.setFont('helvetica', 'bold'); d.setFontSize(18); d.setTextColor(0); d.text(title, M + 116, 41);
+    d.setFont('helvetica', 'normal'); d.setFontSize(9.5); d.setTextColor(80); d.text(sub, M + 116, 54);
+    d.setDrawColor(0, 94, 184); d.setLineWidth(3); d.line(M, 66, PW - M, 66); d.setTextColor(0);
+  };
+  const foot = () => { d.setFontSize(8); d.setTextColor(120); d.text('4Wall Entertainment · Truck Pack Planner · ' + (S.job || 'Untitled job') + ' · Page ' + d.getNumberOfPages(), M, PH - 18); d.setTextColor(0); };
+  const subOf = p => `${S.job || 'Untitled job'}  ·  ${p.truck.name}  ·  ${fmtLen(p.truck.L)} x ${fmtLen(p.truck.W)} x ${fmtLen(p.truck.H)}  ·  ${new Date().toLocaleDateString()}`;
+  if (list.length > 1) {
+    page(); head('JOB SUMMARY · ' + list.length + ' TRUCKS', `${S.job || 'Untitled job'}  ·  ${new Date().toLocaleDateString()}`);
+    let y = 90; const cols = [['Truck', 110], ['Vehicle', 120], ['Cases', 50, 'r'], ['', 16], ['Weight', 140], ['Floor used', 120], ['Load bars / straps', 170]];
+    const row = (v, bold) => { let x = M; d.setFont('helvetica', bold ? 'bold' : 'normal'); d.setFontSize(9.5); cols.forEach(([t, w, a], i) => { d.text(String(v[i]), a ? x + w - 6 : x, y, { align: a ? 'right' : 'left', maxWidth: w - 8 }); x += w; }); y += 16; };
+    row(cols.map(c => c[0]), true); d.setLineWidth(1); d.line(M, y - 11, PW - M, y - 11);
+    list.forEach(p => row([p.name, p.truck.name, p.boxes.length, '', fmtWt(p.stats.weight) + (p.truck.payload ? ' of ' + fmtWt(p.truck.payload) : ''), fmtLen(p.stats.usedL) + ' of ' + fmtLen(p.truck.L), p.restraints.map(r => r.label).join(', ') || 'None']));
+    y += 14; d.setFont('helvetica', 'bold'); d.setFontSize(11); d.text('GEAR BY TRUCK', M, y); y += 8;
+    const cw = (PW - M * 2) / Math.min(list.length, 3);
+    list.forEach((p, i) => {
+      if (i && i % 3 === 0) { foot(); page(); head('GEAR BY TRUCK (CONT.)', S.job || ''); y = 84; }
+      const x = M + (i % 3) * cw; let yy = y + 14; d.setFont('helvetica', 'bold'); d.setFontSize(10); d.text(p.name + ' · ' + p.truck.name, x, yy); d.setFont('helvetica', 'normal'); d.setFontSize(8.5); yy += 13;
+      p.legend.forEach(l => { if (yy > PH - 40) return; d.setFillColor(...hexRgb(l.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x, yy - 7, 8, 8, 'FD'); d.text(`${l.name}  x${l.placed}${l.qty > 1 ? '  (#' + ranges(l.units) + ' of ' + l.qty + ')' : ''}`, x + 12, yy, { maxWidth: cw - 16 }); yy += 12; });
+    });
+    if (unplacedAll.length) { d.setTextColor(180, 35, 24); d.setFontSize(9); d.text('Not loaded in any truck: ' + unplacedWarnings().join('  '), M, PH - 34, { maxWidth: PW - M * 2 }); d.setTextColor(0); }
+    foot();
+  }
+  for (const p of list) {
+    if (viewer) viewer.setPlan(p);
+    const T = p.truck, s = p.stats, n = p.steps.length, tname = multi() ? p.name.toUpperCase() + ' · ' : '';
+    const img = (v, w, h, st) => viewer.snapshot(w, h, v, st, 'jpeg');
+    page(); head(tname + 'TRUCK PACK', subOf(p));
+    d.addImage(img('iso', 1200, 760), 'JPEG', M, 78, 456, 289);
+    let tw = PW - M * 2 - 470, topH = tw * (T.W + 60) / (T.L + 40), sideH = tw * (T.H + 40) / (T.L + 40);
+    const fitK = Math.min(1, 262 / (topH + sideH)); tw = Math.round(tw * fitK); topH = Math.round(topH * fitK); sideH = Math.round(sideH * fitK);
+    d.setFontSize(9); d.setFont('helvetica', 'bold');
+    d.text('TOP (nose left, doors right, curb side up)', M + 470, 86); d.addImage(img('top', 900, Math.round(900 * topH / tw)), 'JPEG', M + 470, 90, tw, topH);
+    d.text('DRIVER SIDE', M + 470, 104 + topH); d.addImage(img('side', 900, Math.round(900 * sideH / tw)), 'JPEG', M + 470, 108 + topH, tw, sideH);
+    let y = 122 + topH + sideH; const rearH = Math.min(367 - y, 120);
+    if (rearH > 50) { d.text('FROM THE DOORS', M + 470, y); d.addImage(img('rear', 600, Math.round(600 / 1.4)), 'JPEG', M + 470, y + 4, rearH * 1.4, rearH); }
+    d.setFont('helvetica', 'normal');
+    y = 390; const st = [['Cases', String(s.count)], ['Floor used', fmtLen(s.usedL) + ' of ' + fmtLen(T.L)], ['Cube used', pct(s.volume, s.truckVol) + '%'], ['Weight', fmtWt(s.weight) + (T.payload ? ' of ' + fmtWt(T.payload) : '')], ['Center of weight', s.cgX != null ? fmtLen(s.cgX) + ' from nose' : 'n/a']];
+    const sx = [0, 70, 200, 290, 470]; st.forEach(([k, v], i) => { const x = M + sx[i]; d.setFontSize(8.5); d.setTextColor(90); d.text(k, x, y); d.setFontSize(13); d.setTextColor(0); d.setFont('helvetica', 'bold'); d.text(v, x, y + 16); d.setFont('helvetica', 'normal'); });
+    y = 428; d.setFontSize(10); d.setFont('helvetica', 'bold'); d.text('CASE LEGEND', M, y); d.setFont('helvetica', 'normal'); y += 8;
+    const colW = (PW - M * 2) / 3;
+    p.legend.forEach((l, i) => {
+      const x = M + (i % 3) * colW, yy = y + Math.floor(i / 3) * 17 + 6; if (yy > PH - 44) return;
+      d.setFillColor(...hexRgb(l.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x, yy, 11, 11, 'FD');
+      d.setFontSize(9); d.text(`${l.name}  x${l.placed}${multi() && l.qty > 1 ? ' (#' + ranges(l.units) + ')' : l.placed < l.qty ? ' (' + (l.qty - l.placed) + ' not loaded)' : ''}  ·  ${l.dims}`, x + 16, yy + 9, { maxWidth: colW - 20 });
+    });
+    let by = y + Math.ceil(p.legend.length / 3) * 17 + 18;
+    if (p.restraints.length && by < PH - 50) { d.setFontSize(9); d.setFont('helvetica', 'bold'); d.text('LOAD BARS AND STRAPS:', M, by); d.setFont('helvetica', 'normal'); d.text(p.restraints.map(r => `${r.label} after order ${r.grp} (${fmtLen(r.x)} from nose)`).join('   ·   '), M + 122, by, { maxWidth: PW - M * 2 - 122 }); by += 14; }
+    const warns = planWarnings(p).concat(list.length === 1 ? unplacedWarnings() : []);
+    if (warns.length) { d.setTextColor(180, 35, 24); d.setFontSize(9); warns.slice(0, 3).forEach(w => { if (by < PH - 26) { d.text('! ' + w, M, by, { maxWidth: PW - M * 2 }); by += 12; } }); d.setTextColor(0); }
+    foot();
+    if (n > 1) {
+      page(); head(tname + 'LOAD PROGRESSION', subOf(p)); const cols = 3, gw = (PW - M * 2 - 20) / cols, gh = gw * 0.62;
+      const marks = [...new Set([1, 2, 3, 4, 5, 6].map(k => Math.max(1, Math.round(n * k / 6))))];
+      marks.forEach((stp, i) => {
+        const x = M + (i % cols) * (gw + 10), yy = 84 + Math.floor(i / cols) * (gh + 40);
+        d.addImage(img('iso', 720, Math.round(720 * 0.62), stp), 'JPEG', x, yy, gw, gh);
+        const prev = i ? marks[i - 1] + 1 : 1; d.setFontSize(10); d.setFont('helvetica', 'bold');
+        d.text(`Steps ${prev}–${stp}`, x, yy + gh + 14); d.setFont('helvetica', 'normal'); d.setFontSize(8.5); d.setTextColor(90);
+        const it = p.steps[stp - 1]; d.text(it.kind === 'restraint' ? `Ends with ${it.label.toLowerCase()} at ${fmtLen(it.x)} from nose` : `Through case #${it.seq}: ${it.name}, ${fmtLen(it.x)} from nose`, x, yy + gh + 26, { maxWidth: gw }); d.setTextColor(0);
+      });
+      foot();
+    }
+    const cols = [['Case', 30, 'r'], ['', 170], ['Size along x across x high', 150], ['Weight', 64, 'r'], ['From nose', 64, 'r'], ['Side', 76], ['Level', 104], ['Check', 40]];
+    let ty = 0; const rowH = 17;
+    const thead = () => { page(); head(tname + 'LOAD SEQUENCE', subOf(p)); ty = 86; let x = M; d.setFontSize(8.5); d.setFont('helvetica', 'bold'); cols.forEach(([t, w, a]) => { d.text(t, a ? x + w - 4 : x + 4, ty, { align: a ? 'right' : 'left' }); x += w; }); d.setFont('helvetica', 'normal'); d.setLineWidth(1); d.setDrawColor(0); d.line(M, ty + 5, PW - M, ty + 5); ty += 18; };
+    thead();
+    p.steps.forEach(b => {
+      if (ty > PH - 40) { foot(); thead(); }
+      if (b.kind === 'restraint') {
+        d.setFillColor(255, 244, 200); d.rect(M, ty - 11, PW - M * 2, rowH - 1, 'F');
+        let rx = M + 34; b.parts.forEach(q => { if (q.type === 'strap') d.setFillColor(255, 196, 0); else d.setFillColor(150, 158, 168); d.rect(rx, ty - 6, 14, 4, 'F'); rx += 17; });
+        d.setFont('helvetica', 'bold'); d.setFontSize(9); d.text('INSTALL ' + b.label.toUpperCase(), rx + 3, ty); d.setFont('helvetica', 'normal');
+        d.text('across the truck, ' + hText(b), M + 204, ty, { maxWidth: 210 });
+        d.text(fmtLen(b.x), M + 474, ty, { align: 'right' }); d.text('Full width', M + 482, ty); d.text('Behind order ' + b.grp, M + 558, ty);
+        d.setDrawColor(120); d.rect(M + 672, ty - 9, 10, 10); d.setDrawColor(215); d.setLineWidth(0.5); d.line(M, ty + 5, PW - M, ty + 5); ty += rowH; return;
+      }
+      const v = [String(b.seq), `${b.name}${b.of > 1 ? '  ' + b.idx + '/' + b.of : ''}`, fmtDim(b.L, b.W, b.H) + '  ' + (Math.abs(b.L - b.W) < 0.5 ? '' : b.W > b.L ? 'across' : 'along'), fmtWt(b.wt), fmtLen(b.x), b.side, b.z < 0.5 ? 'Floor' : 'On #' + b.on.join(', #'), ''];
+      let x = M; d.setFontSize(9);
+      cols.forEach(([t, w, a], i) => {
+        if (i === 1) { d.setFillColor(...hexRgb(b.color)); d.setDrawColor(60); d.setLineWidth(0.5); d.rect(x + 4, ty - 8, 9, 9, 'FD'); d.text(v[i], x + 18, ty, { maxWidth: w - 20 }); }
+        else if (i === 7) { d.setDrawColor(120); d.rect(x + 14, ty - 9, 10, 10); }
+        else d.text(v[i], a ? x + w - 4 : x + 4, ty, { align: a ? 'right' : 'left', maxWidth: w - 6 });
+        x += w;
+      });
+      d.setDrawColor(215); d.setLineWidth(0.5); d.line(M, ty + 5, PW - M, ty + 5); ty += rowH;
+    });
+    d.setFontSize(8); d.setTextColor(90); if (ty < PH - 30) d.text('Along/across = direction of the long side. Load top to bottom; cases rest only on cases with lower numbers. Yellow rows: install the load bar or strap before continuing.', M, Math.min(PH - 30, ty + 6)); d.setTextColor(0);
+    foot();
+  }
+  if (viewer) { viewer.setPlan(plan); setStep(plan.steps.length); renderAdj(); }
+  await save(fileBase() + scopeTag(list) + '-load-sheet.pdf', d.output('arraybuffer'));
+}
+const exportPlan = p => ({ id: p.id, name: p.name, job: p.job, units: p.units, truck: p.truck, boxes: p.boxes, restraints: p.restraints, steps: p.steps, legend: p.legend, created: p.created });
+function crewHTML(list) {
+  const data = JSON.stringify({ plans: list.map(exportPlan), job: S.job, units: S.units, logo: LOGO, notLoaded: unplacedAll.map(u => ({ name: (typeOf(u.type) || {}).name, idx: u.idx, reason: u.reason })) }).replace(/</g, '\\u003c');
+  return '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc((S.job || 'Truck pack') + ' · 4Wall load plan') + '</title>'
+    + '<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">'
+    + '<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"><\/script>'
+    + '<style>' + CREW_CSS + '</style></head><body>' + CREW_BODY + '<script>const DATA=' + data + ';\n' + TPViewer.toString() + '\n' + CREW_JS + '<\/script></body></html>';
+}
+const CREW_CSS = `*{box-sizing:border-box}body{margin:0;font:15px/1.45 Roboto,Arial,sans-serif;background:#fff;color:#0b0b0c}h1,h2{font-family:"Bebas Neue",Arial,sans-serif;font-weight:400;margin:0;line-height:1.05}header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 16px;border-bottom:4px solid #005eb8}header img{height:34px}header h1{font-size:28px;border-left:3px solid #005eb8;padding-left:12px}header p{margin:0;color:#5b6068;font-size:14px;width:100%}.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 16px 0}.tabs button{display:grid;text-align:left;line-height:1.2;padding:8px 14px}.tabs small{color:inherit;opacity:.8;font-size:12px}.vb{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}button{font:inherit;min-height:42px;padding:0 14px;border:1px solid #cfd3d9;background:#fff;border-radius:4px;cursor:pointer}button[aria-pressed=true],button.p{background:#005eb8;color:#fff;border-color:#005eb8}#vp{height:58vh;min-height:320px;background:#0d0f12;touch-action:none}.sb{display:grid;grid-template-columns:auto auto 1fr auto;gap:6px;align-items:center;padding:10px 16px}input[type=range]{width:100%;height:42px;accent-color:#005eb8}#cap{margin:0 16px;padding:10px 12px;border-left:4px solid #005eb8;background:#f4f5f6;min-height:48px}section{padding:16px}.lg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px}.lg span{display:inline-flex;gap:6px;align-items:center;border:1px solid #d9dce1;border-radius:16px;padding:4px 10px 4px 5px;font-size:14px}.lg i,.sw{display:inline-block;width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.3)}.sw{border-radius:3px;width:13px;height:13px;margin-right:6px;vertical-align:-2px}table{border-collapse:collapse;width:100%;font-size:14px}th{text-align:left;border-bottom:2px solid #000;padding:5px 6px;color:#5b6068;font-weight:500}td{border-bottom:1px solid #e1e3e7;padding:6px}tr.cur td{background:#e6f0fa}tr.rs td{background:#fff4c8}tr.rs.cur td{background:#ffe27a}tr{cursor:pointer}.n{text-align:right;white-space:nowrap}.warn{color:#b42318}@media(max-width:600px){td:nth-child(3),th:nth-child(3){display:none}}`;
+const CREW_BODY = `<header><img id="lg" alt="4Wall Entertainment"><h1 id="tt">Load plan</h1><p id="meta"></p></header><div class="tabs" id="tabs"></div><div class="vb"><button data-v="iso" aria-pressed="true">3D</button><button data-v="top">Top</button><button data-v="side">Side</button><button data-v="rear">From doors</button></div><div id="vp"></div><div class="sb"><button id="pv" aria-label="Previous">◀</button><button id="nx" class="p" aria-label="Next">▶</button><input type="range" id="rg" min="0" value="0" aria-label="Step"><button id="al">All</button></div><p id="cap"></p><section><h2>Cases in this truck</h2><div class="lg" id="leg"></div><h2>Load sequence</h2><table><thead><tr><th class="n">Step</th><th>Case</th><th>Size</th><th>Position</th></tr></thead><tbody id="tb"></tbody></table><p id="nl" class="warn"></p></section>`;
+const CREW_JS = `(function(){var PL=DATA.plans,P,B,m=DATA.units==='metric',v=null,cur=0;function e(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function fl(i){if(m){var c=i*2.54;return c>=100?(c/100).toFixed(2)+' m':Math.round(c)+' cm'}var t=Math.round(i),f=Math.floor(t/12),n=t%12;return f?f+"' "+n+'"':n+'"'}
+function dim(b){return[b.L,b.W,b.H].map(function(v){return Math.round(m?v*2.54:v)}).join(' × ')+(m?' cm':' in')}
+function ht(r){return 'at '+r.parts.map(function(p){return fl(p.h)}).join(' and ')+' off the floor'}
+function pos(b){return b.kind==='restraint'?'Across the truck at '+fl(b.x)+' from nose, '+ht(b):fl(b.x)+' from nose, '+b.side.toLowerCase()+', '+(b.z<.5?'on the floor':'on top of #'+b.on.join(', #'))}
+var rg=document.getElementById('rg'),cap=document.getElementById('cap');
+document.getElementById('lg').src=DATA.logo;document.getElementById('tt').textContent=(DATA.job||'Truck pack');document.title=(DATA.job||'Truck pack')+' · 4Wall load plan';
+document.getElementById('tabs').innerHTML=PL.length>1?PL.map(function(p,i){return '<button data-i="'+i+'"><b>'+e(p.name)+'</b><small>'+e(p.truck.name)+' · '+p.boxes.length+' cases</small></button>'}).join(''):'';
+if(DATA.notLoaded.length)document.getElementById('nl').textContent='Not loaded in any truck: '+DATA.notLoaded.map(function(u){return u.name+' '+u.idx}).join(', ');
+function set(n){n=Math.max(0,Math.min(B.length,n));rg.max=B.length;rg.value=n;if(v)v.setStep(n);[].forEach.call(document.querySelectorAll('tr.cur'),function(r){r.classList.remove('cur')});
+if(!B.length){cap.innerHTML='<b>Nothing in this truck.</b>';return}
+if(n===B.length){cap.innerHTML='<b>All '+P.boxes.length+' cases in '+e(P.name)+'.</b> Tap ▶ from the start to walk the load in order.';return}if(!n){cap.innerHTML='<b>Empty truck.</b> Tap ▶ for step 1.';return}
+var b=B[n-1],r=document.querySelector('tr[data-s="'+n+'"]');if(r)r.classList.add('cur');
+cap.innerHTML=b.kind==='restraint'?'<b>Step '+n+' of '+B.length+': install '+e(b.label.toLowerCase())+'.</b> '+e(pos(b))+'.':'<b>Step '+n+' of '+B.length+': case #'+b.seq+' '+e(b.name)+(b.of>1?' ('+b.idx+' of '+b.of+')':'')+'.</b> '+e(pos(b))+'.'}
+function show(i){cur=i;P=PL[i];B=P.steps;
+[].forEach.call(document.querySelectorAll('#tabs button'),function(x){x.setAttribute('aria-pressed',+x.dataset.i===i)});
+document.getElementById('meta').textContent=P.name+' · '+P.truck.name+' · '+fl(P.truck.L)+' × '+fl(P.truck.W)+' × '+fl(P.truck.H)+' · '+P.boxes.length+' cases · '+P.restraints.length+' load bar/strap positions · planned '+P.created;
+document.getElementById('leg').innerHTML=P.legend.map(function(l){return '<span><i style="background:'+e(l.color)+'"></i>'+e(l.name)+' ×'+l.placed+'</span>'}).join('');
+document.getElementById('tb').innerHTML=B.map(function(b){return b.kind==='restraint'?'<tr class="rs" data-s="'+b.step+'"><td class="n">'+b.step+'</td><td><b>Install '+e(b.label.toLowerCase())+'</b></td><td></td><td>'+e(pos(b))+'</td></tr>':'<tr data-s="'+b.step+'"><td class="n">'+b.step+'</td><td><span class="sw" style="background:'+e(b.color)+'"></span>#'+b.seq+' '+e(b.name)+(b.of>1?' '+b.idx+'/'+b.of:'')+'</td><td>'+dim(b)+'</td><td>'+e(pos(b))+'</td></tr>'}).join('');
+if(v)v.setPlan(P);set(B.length)}
+try{v=TPViewer(document.getElementById('vp'),{onPick:function(b){if(b)set(b.step)}})}catch(x){document.getElementById('vp').innerHTML='<p style="color:#fff;padding:20px">The 3D view needs an internet connection the first time it opens. The load sequence below still works.</p>'}
+show(0);
+document.getElementById('tabs').onclick=function(ev){var t=ev.target.closest('[data-i]');if(t)show(+t.dataset.i)};
+document.getElementById('pv').onclick=function(){set(+rg.value-1)};document.getElementById('nx').onclick=function(){set(+rg.value>=B.length?1:+rg.value+1)};document.getElementById('al').onclick=function(){set(B.length)};rg.oninput=function(){set(+rg.value)};
+document.getElementById('tb').onclick=function(ev){var r=ev.target.closest('tr');if(r){set(+r.dataset.s);window.scrollTo({top:0,behavior:'smooth'})}};
+[].forEach.call(document.querySelectorAll('[data-v]'),function(b){b.onclick=function(){[].forEach.call(document.querySelectorAll('[data-v]'),function(x){x.setAttribute('aria-pressed',x===b)});if(v)v.setView(b.dataset.v)}});})();`;
+$$('[data-x]').forEach(b => b.addEventListener('click', async () => {
+  const list = scoped(), x = b.dataset.x;
+  if (!list.some(p => p.boxes.length)) { toast('Nothing loaded yet.'); return; }
+  if (x === 'copy') { try { await navigator.clipboard.writeText(listText(list)); toast('Load list copied'); } catch (e) { toast('Copy was blocked by the browser.'); } return; }
+  if (x === 'csv') return save(fileBase() + scopeTag(list) + '-load-list.csv', csv(list));
+  if (x === 'png') return save(fileBase() + (multi() ? '-' + plan.name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') : '') + '-' + viewer.view + '.png', b64ToBytes(viewer.snapshot(1800, 1100)));
+  if (x === 'html') return save(fileBase() + scopeTag(list) + '-3d-load-plan.html', crewHTML(list));
+  if (x === 'pdf') { b.disabled = true; try { await pdf(list); } finally { b.disabled = false; } }
+}));
+
+/* ---------- Saved plans (shared) ---------- */
+function planDoc() { return { name: S.job || 'Untitled job', truck: S.trucks.map(t => t.truck.name).join(' + '), cases: S.cases.reduce((a, c) => a + (+c.qty || 0), 0), updatedAt: Date.now(), state: JSON.parse(snapshot()) }; }
+$('#saveBtn').addEventListener('click', async () => {
+  if (!db) return; if (!S.job) { $('#jobName').focus(); toast('Give the job a name first.'); return; }
+  const b = $('#saveBtn'); b.disabled = true;
+  try { if (!S.planId) S.planId = uid() + uid(); await db.doc('plans/' + S.planId).set(planDoc()); toast('Plan saved'); commit(); }
+  catch (e) { toast(e && e.code === 'invalid_argument' ? 'You have view-only access, so plans cannot be saved.' : 'Save failed (' + ((e && e.code) || 'error') + ').'); }
+  finally { b.disabled = false; }
+});
+let planList = [];
+function renderPlans() {
+  $('#plans').innerHTML = planList.length ? planList.map(p => `<li><div><b>${esc(p.name)}</b><small>${esc(p.truck)} · ${+p.cases || 0} cases · ${new Date(+p.updatedAt || 0).toLocaleString()}</small></div><button class="btn sm pri" data-open="${esc(p.id)}">Open</button><button class="btn sm" data-rm="${esc(p.id)}">Delete</button></li>`).join('') : '<li>No saved plans yet. Name the job and press Save plan.</li>';
+}
+$('#plans').addEventListener('click', async e => {
+  const o = e.target.closest('[data-open]'), r = e.target.closest('[data-rm]');
+  if (o) { const p = planList.find(p => p.id === o.dataset.open); if (!p || !p.state) return; S = normalize(Object.assign(fresh(false), { trucks: null }, JSON.parse(JSON.stringify(p.state)), { planId: p.id, isSample: false })); sel = null; renderAll(); commit(); closeM(); toast('Opened ' + p.name); }
+  if (r) { if (r.dataset.sure !== '1') { r.dataset.sure = '1'; r.textContent = 'Delete?'; return; } try { await db.doc('plans/' + r.dataset.rm).delete(); if (S.planId === r.dataset.rm) S.planId = null; } catch (e) { toast('Delete failed.'); } }
+});
+$('#openBtn').addEventListener('click', () => { renderPlans(); openM('#openM'); });
+$('#newBtn').addEventListener('click', () => { S = fresh(false); sel = null; renderAll(); commit(); toast('New plan. Undo restores the previous one.'); });
+$('#undoBtn').addEventListener('click', undo);
+
+function renderAll() { renderTruck(); renderCases(); repack(); renderRestraints(true); }
+function startViewer() {
+  if (!window.THREE) { $('#vp').insertAdjacentHTML('beforeend', '<div class="err">The 3D view could not load. Everything else still works.</div>'); return; }
+  try { viewer = TPViewer($('#vp'), { onPick: b => { if (!b) return; if (b.kind === 'case') selectCase(keyOf(b)); else { sel = null; renderAdj(); setStep(b.step); } } }); } catch (e) { $('#vp').insertAdjacentHTML('beforeend', '<div class="err">This device could not start the 3D view (WebGL is off).</div>'); }
+}
+startViewer(); $('#vpTag').textContent = '3D'; renderAll(); commit();
+if (window.claude && window.claude.use) {
+  window.claude.use('downloads').then(d => { dl = d; $('#dlNote').textContent = d ? '' : 'File downloads are not available in this view. Copy load list still works.'; }).catch(() => { });
+  window.claude.use('db').then(d => {
+    db = d; if (!d) return; $('#saveBtn').disabled = false; $('#openBtn').disabled = false;
+    plansUnsub = d.collection('plans').orderBy('updatedAt', 'desc').limit(200).onSnapshot(s => { planList = s.docs.map(x => Object.assign({ id: x.id }, x.data())); if ($('#openM').classList.contains('on')) renderPlans(); }, () => { });
+  }).catch(() => { });
+} else $('#dlNote').textContent = 'File downloads and saved plans work when this page is opened in Claude.';
+}
+
+</script>
+</body>
+</html>
